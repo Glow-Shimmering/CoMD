@@ -1,0 +1,86 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+
+export async function checkWorkspace(page, application, { temp, output, setText, until, exportViaUI }) {
+  const folder = path.join(temp, '写作资料库'), nested = path.join(folder, '章节');
+  await fs.mkdir(path.join(nested, '空文件夹'), { recursive: true });
+  const mixed = '# HTML 混排笔记\n\n<div align="center"><span style="color: #e53935; font-size: 22px">居中的彩色文字</span><br><sub>下标</sub> / <sup>上标</sup></div>\n\n<details>\n<summary>展开说明</summary>\n\n这里支持 **Markdown 加粗**。\n\n</details>\n\n<table><tr><th>项目</th><th>内容</th></tr><tr><td>HTML 表格</td><td><em>保留格式</em></td></tr></table>\n\n<h2 id="custom-heading">HTML 小节标题</h2>\n<p><font color="blue">字体颜色</font></p>\n\n<div class="modal-backdrop" style="position:fixed; z-index:999999; background-image:url(https://example.invalid/leak)">普通文档内容</div>\n<script>window.__injected=true</script>\n<img src="javascript:alert(1)" onerror="window.__injected=true">\n<iframe src="https://example.invalid"></iframe>\n<style>body{display:none}</style>\n';
+  await fs.writeFile(path.join(folder, '混排.md'), mixed);
+  await fs.writeFile(path.join(nested, '章节一.MD'), '# 第一章\n\n待编辑。');
+  await fs.writeFile(path.join(folder, '说明.txt'), '本地文本');
+  await application.evaluate(({ dialog }, directory) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] }); }, folder);
+  await page.getByRole('button', { name: /打开文件夹/ }).click();
+  const tree = page.getByRole('navigation', { name: '文件夹树' });
+  await tree.getByRole('button', { name: '混排.md', exact: true }).click();
+  await page.getByRole('button', { name: '阅读', exact: true }).click();
+  await page.locator('.prose details summary').waitFor();
+  assert.equal(await page.locator('.prose span').filter({ hasText: '居中的彩色文字' }).evaluate(el => getComputedStyle(el).color), 'rgb(229, 57, 53)');
+  assert.match(await page.locator('.prose table').innerText(), /HTML 表格/);
+  await page.locator('.prose summary').click();
+  assert.equal(await page.locator('.prose details strong').innerText(), 'Markdown 加粗');
+  assert.equal(await page.locator('.prose h2').getAttribute('id'), 'custom-heading');
+  assert.equal(await page.locator('.prose script,.prose iframe,.prose style,.prose .modal-backdrop,.prose [onerror]').count(), 0);
+  assert.equal(await page.evaluate(() => window.__injected), undefined);
+  assert.equal(await page.getByText('普通文档内容', { exact: true }).getAttribute('style'), null);
+  await page.locator('.sidebar-switch').getByRole('button', { name: /大纲/ }).click();
+  await page.locator('.outline-item').filter({ hasText: 'HTML 小节标题' }).click();
+  await page.getByRole('button', { name: '源码', exact: true }).click();
+  await page.locator('.outline-item').filter({ hasText: 'HTML 小节标题' }).click();
+  assert.match(await page.locator('.statusbar').innerText(), new RegExp(`行 ${mixed.split('\n').findIndex(line => line.startsWith('<h2')) + 1}`));
+  await page.getByRole('button', { name: '阅读', exact: true }).click();
+  const htmlFile = path.join(output, 'mixed-html-export.html');
+  await exportViaUI('html', htmlFile);
+  const html = await fs.readFile(htmlFile, 'utf8');
+  assert.match(html, /<details>/); assert.match(html, /color: rgb\(229, 57, 53\)/); assert.doesNotMatch(html, /<script|<iframe|position:fixed|window.__injected/);
+  assert.equal(await fs.readFile(path.join(folder, '混排.md'), 'utf8'), mixed, 'Rendering does not rewrite the source');
+  await page.locator('.sidebar-switch').getByRole('button', { name: '文件', exact: true }).click();
+  await tree.getByRole('button', { name: '展开文件夹 章节', exact: true }).click();
+  await tree.getByRole('button', { name: '章节一.MD', exact: true }).click();
+  await page.getByRole('button', { name: '源码', exact: true }).click();
+  await setText('# 第一章\n\n未丢失的修改。');
+  await tree.getByRole('button', { name: '章节一.MD', exact: true }).click();
+  assert.match(await page.locator('.cm-content').innerText(), /未丢失/);
+  assert.equal(await page.locator('.tab-label').filter({ hasText: '章节一.MD' }).count(), 1);
+  await fs.writeFile(path.join(nested, '新增.md'), '# 新增');
+  await page.getByRole('button', { name: '刷新文件夹', exact: true }).click();
+  await tree.getByRole('button', { name: '新增.md', exact: true }).waitFor();
+  await tree.getByRole('button', { name: '展开文件夹 空文件夹', exact: true }).click();
+  await tree.getByText('没有 Markdown 或文本文件').waitFor();
+  const denied = await page.evaluate(async file => window.comd.openFolderFile(file), path.join(temp, '写作测试.md'));
+  assert.equal(denied.ok, false);
+  await page.getByRole('button', { name: '关闭文件夹', exact: true }).click();
+  await page.getByRole('navigation', { name: '文件夹树' }).waitFor({ state: 'detached' });
+  assert.equal(await page.getByRole('navigation', { name: '文件夹树' }).count(), 0);
+  assert.equal(await page.locator('.tab-label').filter({ hasText: '章节一.MD' }).count(), 1);
+  const closed = await page.evaluate(async file => window.comd.listFolder(file), folder); assert.equal(closed.ok, false);
+  await page.getByRole('button', { name: /打开文件夹/ }).click();
+  await tree.getByRole('button', { name: '展开文件夹 章节', exact: true }).click();
+  await tree.getByRole('button', { name: '混排.md', exact: true }).click();
+  await page.getByRole('button', { name: '阅读', exact: true }).click();
+  await page.screenshot({ path: path.join(output, 'CoMD-folder-html.png') });
+
+  // A long document gives the source and preview very different total heights.
+  await tree.getByRole('button', { name: '章节一.MD', exact: true }).click();
+  await page.getByRole('button', { name: '源码', exact: true }).click();
+  await setText(Array.from({ length: 70 }, (_, i) => `## 第 ${i + 1} 节\n\n${'这是一段用于检验同步滚动的文字。'.repeat(6)}\n\n- 项目甲\n- 项目乙\n`).join('\n'));
+  await page.getByRole('button', { name: '双栏', exact: true }).click();
+  await until(() => page.locator('.preview-pane').evaluate(el => el.scrollHeight > el.clientHeight * 4), 'long split preview');
+  const source = page.locator('.cm-scroller'), preview = page.locator('.preview-pane');
+  const ratio = locator => locator.evaluate(el => el.scrollTop / (el.scrollHeight - el.clientHeight));
+  await preview.evaluate(el => { el.scrollTop = 0; }); await source.evaluate(el => { el.scrollTop = 0; });
+  const previewBounds = await preview.boundingBox(); await page.mouse.move(previewBounds.x + 100, previewBounds.y + 150); await page.mouse.wheel(0, 1300);
+  await until(async () => (await ratio(source)) > .01 && Math.abs(await ratio(source) - await ratio(preview)) < .015, 'preview drives source');
+  const sourceBounds = await source.boundingBox(); await page.mouse.move(sourceBounds.x + 100, sourceBounds.y + 150); await page.mouse.wheel(0, 1600);
+  await until(async () => (await ratio(preview)) > .025 && Math.abs(await ratio(source) - await ratio(preview)) < .015, 'source drives preview');
+  await preview.evaluate(el => { el.scrollTop = el.scrollHeight; });
+  await until(async () => await ratio(source) > .99, 'preview bottom drives source bottom');
+  await source.evaluate(el => { el.scrollTop = 0; });
+  await until(async () => await ratio(preview) < .001, 'source top drives preview top');
+  const before = await ratio(preview); await page.waitForTimeout(350);
+  assert.ok(Math.abs(await ratio(preview) - before) < .001, 'Synchronization settles without feedback loops');
+  await page.getByRole('button', { name: '源码', exact: true }).click();
+  return ['HTML mixed Markdown renders formatting, details, table and headings safely; export preserves presentation',
+    'Folder tree: nested/empty folders, multiple files, refresh, duplicate-open protection and authorized paths',
+    'Bidirectional split scrolling with wheel input, top/bottom alignment and stable feedback suppression'];
+}

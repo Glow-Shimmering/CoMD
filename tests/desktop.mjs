@@ -5,6 +5,7 @@ import os from 'node:os';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { checkOutline } from './outline.mjs';
+import { checkWorkspace } from './workspace.mjs';
 
 const root = path.resolve('.'), output = path.join(root, 'test-results');
 await fs.mkdir(output, { recursive: true });
@@ -56,6 +57,7 @@ try {
   checks.push('Live task checkbox edits Markdown; paragraph selector applies a heading at line start');
   await checkOutline(page, { setText, until, output });
   checks.push('Separate document/outline views; nested folds, skipped levels, duplicate titles, navigation, keyboard and per-document state');
+  checks.push(...await checkWorkspace(page, application, { temp, output, setText, until, exportViaUI }));
   await application.evaluate(({ dialog }, target) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [target] }); }, file);
   await page.getByRole('button', { name: /打开文件/ }).first().click();
   await until(async () => (await page.locator('.cm-content').innerText()).includes('原始内容'), 'open native file');
@@ -113,6 +115,8 @@ try {
   await launch();
   await page.locator('.tab-label').filter({ hasText: '未命名.md' }).click();
   assert.match(await page.locator('.cm-content').innerText(), /跨重启保留/);
+  await page.getByRole('navigation', { name: '文件夹树' }).getByRole('button', { name: '收起文件夹 写作资料库', exact: true }).waitFor();
+  checks.push('Opened folder is restored after quit/relaunch');
   checks.push('Quit/relaunch restores unsaved drafts and open documents');
   assert.deepEqual(errors, []);
   await fs.writeFile(path.join(output, 'desktop-report.json'), JSON.stringify({ passed: checks, rendererErrors: errors, platform: process.platform, arch: process.arch, packagedMacApplicationTested: !!process.env.COMD_EXECUTABLE, realAIProviderTested: false }, null, 2));

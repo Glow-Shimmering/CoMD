@@ -8,6 +8,7 @@ const subscribe = channel => callback => {
 contextBridge.exposeInMainWorld('comd', {
   platform: process.platform,
   bootstrap: invoke('bootstrap'), open: invoke('open'), openRecent: invoke('open-recent'),
+  openFolder: invoke('open-folder'), listFolder: invoke('list-folder'), openFolderFile: invoke('open-folder-file'), closeFolder: invoke('close-folder'),
   save: invoke('save'), reload: invoke('reload'), persist: invoke('persist'),
   closeDoc: invoke('close-doc'), exportFile: invoke('export'), external: invoke('external'),
   aiSettings: invoke('ai-settings'), updateAI: invoke('ai-update'), rewrite: invoke('ai-rewrite'),

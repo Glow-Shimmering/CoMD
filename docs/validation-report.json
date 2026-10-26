@@ -3,6 +3,9 @@
     "Desktop boot, sandboxed renderer, welcome live editor",
     "Live task checkbox edits Markdown; paragraph selector applies a heading at line start",
     "Separate document/outline views; nested folds, skipped levels, duplicate titles, navigation, keyboard and per-document state",
+    "HTML mixed Markdown renders formatting, details, table and headings safely; export preserves presentation",
+    "Folder tree: nested/empty folders, multiple files, refresh, duplicate-open protection and authorized paths",
+    "Bidirectional split scrolling with wheel input, top/bottom alignment and stable feedback suppression",
     "Native file open, typing, autosave, UTF-8 BOM / CRLF preservation",
     "Clean document reloads external edits",
     "Dirty conflict detected without overwriting; explicit reload resolves it",
@@ -10,6 +13,7 @@
     "Standalone HTML export with embedded image/fonts; actual PDF output",
     "AI protocol via local mock, review-before-apply, selected-text payload",
     "Undo history persists across tab switching",
+    "Opened folder is restored after quit/relaunch",
     "Quit/relaunch restores unsaved drafts and open documents"
   ],
   "rendererErrors": [],
@@ -18,10 +22,10 @@
   "packagedMacApplicationTested": false,
   "realAIProviderTested": false,
   "packagedMacSmokeTested": true,
-  "packagedVersion": "0.2.1",
+  "packagedVersion": "0.3.0",
   "visualReview": {
-    "documentTab": true,
-    "nestedOutline": true,
+    "folderTree": true,
+    "htmlAndMath": true,
     "compactWidth": 900,
     "horizontalOverflow": false
   }

@@ -389,3 +389,27 @@ select.text-tool { width: 72px; color: var(--subtle); }
   .workspace-badge { width: 27px; }
   .sidebar-bottom .icon-button { width: 22px; }
 }
+
+/* File explorer */
+.sidebar .open-folder { margin-top: 0; }
+.folder-hint { font-size: 11px; color: var(--muted); line-height: 1.7; margin: 2px 10px 20px; }
+.folder-section { margin-bottom: 22px; }
+.folder-label { margin-bottom: 5px; padding-right: 3px; }
+.folder-actions { display: flex; margin-left: auto; }
+.folder-actions .icon-button { width: 23px; height: 23px; }
+.file-tree,.file-tree ul { list-style: none; margin: 0; padding: 0; }
+.file-tree ul { padding-left: 12px; }
+.file-tree-row { display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; padding: 8px 6px; border-radius: 5px; color: var(--subtle); font-size: 11px; text-align: left; }
+.file-tree-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-tree-row svg { flex-shrink: 0; color: var(--muted); }
+.file-tree-row:hover { background: var(--hover); }
+.file-tree-row.active { color: var(--brand); background: var(--selected); }
+.file-tree-row.active svg { color: var(--brand); }
+.file-row { padding-left: 24px; }
+.root-directory { font-weight: 600; color: var(--heading); }
+.directory-row[aria-expanded="true"] .directory-chevron { transform: rotate(90deg); }
+.file-tree-message { font-size: 10px; color: var(--muted); line-height: 1.6; padding: 5px 10px; overflow-wrap: anywhere; }
+.prose { isolation: isolate; contain: layout style; }
+.prose details { border: 1px solid var(--line); border-radius: 7px; margin: 20px 0; padding: 10px 16px; }
+.prose summary { cursor: pointer; font-weight: 550; }
+.prose details[open] summary { margin-bottom: 12px; }

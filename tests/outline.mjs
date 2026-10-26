@@ -6,7 +6,7 @@ export async function checkOutline(page, { setText, until, output }) {
   const visible = () => page.locator('.outline-text:visible').allTextContents();
   const toggle = (verb, title) => page.getByRole('button', { name: `${verb} ${title} 的下级标题`, exact: true });
   const openOutline = () => page.locator('.sidebar-switch').getByRole('button', { name: /大纲/ }).click();
-  const openFiles = () => page.locator('.sidebar-switch').getByRole('button', { name: '文档', exact: true }).click();
+  const openFiles = () => page.locator('.sidebar-switch').getByRole('button', { name: '文件', exact: true }).click();
 
   await openFiles();
   assert.equal(await page.getByText('本页大纲', { exact: true }).count(), 0);

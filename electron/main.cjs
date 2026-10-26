@@ -4,11 +4,12 @@ const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const { readDocument, writeDocument, atomicWrite, within } = require('./files.cjs');
+const { folderInfo, listFolder, folderDocument } = require('./folders.cjs');
 
 app.setName('CoMD');
 if (process.env.COMD_TEST_DIR) app.setPath('userData', process.env.COMD_TEST_DIR);
 protocol.registerSchemesAsPrivileged([{ scheme: 'comd-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
-let win, state = { docs: [], activeId: null, recent: [], preferences: {} }, closing = false, pollBusy = false, quitting = false;
+let win, state = { docs: [], activeId: null, recent: [], preferences: {}, folder: null }, closing = false, pollBusy = false, quitting = false;
 const records = new Map();
 let stateQueue = Promise.resolve(), saveQueue = Promise.resolve();
 const dataFile = () => path.join(app.getPath('userData'), 'workspace.json');
@@ -62,6 +63,15 @@ function installHandlers() {
     if (!state.recent.includes(file)) throw new Error('该文件不在最近打开列表中。');
     return openPath(file);
   });
+  handle('open-folder', async () => {
+    const result = await dialog.showOpenDialog(win, { title: '打开文件夹', properties: ['openDirectory'] });
+    if (result.canceled || !result.filePaths[0]) return null;
+    state.folder = await folderInfo(result.filePaths[0]);
+    await checkpoint(); return state.folder;
+  });
+  handle('list-folder', directory => listFolder(state.folder?.path, directory));
+  handle('open-folder-file', async file => openPath(await folderDocument(state.folder?.path, file)));
+  handle('close-folder', async () => { state.folder = null; await checkpoint(); return true; });
   handle('persist', async next => {
     if (!Array.isArray(next.docs) || next.docs.length > 100) throw new Error('工作区数据无效。');
     const docs = next.docs.map(doc => {
@@ -158,7 +168,7 @@ function menu() {
   const action = name => () => send('action', name);
   const template = [
     ...(process.platform === 'darwin' ? [{ label: 'CoMD', submenu: [{ role: 'about' }, { type: 'separator' }, { label: '设置…', accelerator: 'CmdOrCtrl+,', click: action('settings') }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit' }] }] : []),
-    { label: '文件', submenu: [{ label: '新建', accelerator: 'CmdOrCtrl+N', click: action('new') }, { label: '打开…', accelerator: 'CmdOrCtrl+O', click: action('open') }, { label: '保存', accelerator: 'CmdOrCtrl+S', click: action('save') }, { label: '另存为…', accelerator: 'CmdOrCtrl+Shift+S', click: action('saveAs') }, { type: 'separator' }, { label: '导出 PDF…', click: action('pdf') }, { label: '导出 HTML…', click: action('html') }, { type: 'separator' }, { label: '关闭文档', accelerator: 'CmdOrCtrl+W', click: action('close') }, ...(process.platform === 'darwin' ? [] : [{ role: 'quit' }])] },
+    { label: '文件', submenu: [{ label: '新建', accelerator: 'CmdOrCtrl+N', click: action('new') }, { label: '打开…', accelerator: 'CmdOrCtrl+O', click: action('open') }, { label: '打开文件夹…', accelerator: 'CmdOrCtrl+Shift+O', click: action('openFolder') }, { label: '保存', accelerator: 'CmdOrCtrl+S', click: action('save') }, { label: '另存为…', accelerator: 'CmdOrCtrl+Shift+S', click: action('saveAs') }, { type: 'separator' }, { label: '导出 PDF…', click: action('pdf') }, { label: '导出 HTML…', click: action('html') }, { type: 'separator' }, { label: '关闭文档', accelerator: 'CmdOrCtrl+W', click: action('close') }, ...(process.platform === 'darwin' ? [] : [{ role: 'quit' }])] },
     { label: '编辑', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }, { type: 'separator' }, { label: '查找与替换', accelerator: 'CmdOrCtrl+F', click: action('find') }] },
     { label: '视图', submenu: [{ label: '专注模式', accelerator: 'CmdOrCtrl+Shift+F', click: action('focus') }, { label: '切换主题', click: action('theme') }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] },
     { label: '帮助', submenu: [{ label: '使用指南', click: action('guide') }, { label: '关于 CoMD', click: () => dialog.showMessageBox(win, { message: `CoMD ${app.getVersion()}`, detail: '专注文字，自在表达。\n基于开源组件独立开发的 Markdown 桌面编辑器。', buttons: ['好'] }) }] }

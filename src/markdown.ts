@@ -5,7 +5,7 @@ import hljs from 'highlight.js';
 import katex from 'katex';
 import katexCSS from 'katex/dist/katex.min.css?inline';
 
-const md = new MarkdownIt({ html: false, linkify: true, breaks: false, typographer: true,
+const md = new MarkdownIt({ html: true, linkify: true, breaks: false, typographer: true,
   highlight(code, language): string {
     if (language && hljs.getLanguage(language)) return hljs.highlight(code, { language, ignoreIllegals: true }).value;
     return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -44,11 +44,47 @@ md.renderer.rules.math_block = (tokens, index) => `<div class="math-block">${mat
 const headingRule = md.renderer.rules.heading_open;
 md.renderer.rules.heading_open = (tokens, index, options, env, self) => {
   tokens[index].attrSet('id', `line-${tokens[index].map?.[0] ?? index}`);
+  tokens[index].attrSet('data-comd-line', String((tokens[index].map?.[0] ?? index) + 1));
   return headingRule ? headingRule(tokens, index, options, env, self) : self.renderToken(tokens, index, options);
 };
+function annotateHTMLHeadings(html: string, startLine: number) {
+  return html.replace(/<h([1-6])\b([^>]*)>/gi, (tag, level, attributes, offset) =>
+    `<h${level} data-comd-line="${startLine + html.slice(0, offset).split('\n').length}"${attributes}>`);
+}
+md.renderer.rules.html_block = (tokens, index) => annotateHTMLHeadings(tokens[index].content, tokens[index].map?.[0] ?? 0);
+
+const forbiddenTags = ['style', 'script', 'iframe', 'object', 'embed', 'form', 'button', 'textarea', 'select', 'link', 'meta', 'base', 'source', 'audio', 'video'];
+// Keep generated math/highlighting classes without exposing the app's UI classes to document HTML.
+const contentClasses = new Set([...katexCSS.matchAll(/\.([a-zA-Z_][\w-]*)/g)].map(match => match[1]));
+for (const name of ['math-block', 'task-list-item', 'task-list-item-checkbox', 'contains-task-list']) contentClasses.add(name);
+const presentationStyles = new Set(['color', 'background-color', 'font-family', 'font-size', 'font-weight', 'font-style', 'font-variant',
+  'text-align', 'text-decoration', 'text-decoration-color', 'text-decoration-line', 'text-indent', 'text-transform', 'line-height', 'letter-spacing',
+  'word-spacing', 'white-space', 'word-break', 'overflow-wrap', 'vertical-align', 'width', 'height', 'min-width', 'max-width', 'min-height', 'max-height',
+  'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'border', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-width', 'border-style', 'border-color', 'border-radius',
+  'border-collapse', 'border-spacing', 'list-style-type', 'display', 'gap', 'align-items', 'justify-content', 'flex-direction', 'flex-wrap', 'top']);
+function cleanPresentation(fragment: DocumentFragment) {
+  fragment.querySelectorAll<HTMLElement>('*').forEach(element => {
+    const classes = [...element.classList].filter(name => contentClasses.has(name) || /^hljs(?:-[\w-]+)?$/.test(name) || /^language-[\w-]+$/.test(name));
+    if (classes.length) element.setAttribute('class', classes.join(' ')); else element.removeAttribute('class');
+    if (element.hasAttribute('style')) {
+      const kept = document.createElement('span').style;
+      for (const property of Array.from(element.style)) {
+        const value = element.style.getPropertyValue(property);
+        if (presentationStyles.has(property) && !/url\s*\(|var\s*\(|expression\s*\(|@import|[<>]/i.test(value)) kept.setProperty(property, value);
+      }
+      if (kept.cssText) element.setAttribute('style', kept.cssText); else element.removeAttribute('style');
+    }
+    for (const attribute of ['srcset', 'tabindex', 'contenteditable', 'autofocus']) element.removeAttribute(attribute);
+    if (element.tagName === 'INPUT') {
+      if (element.getAttribute('type') === 'checkbox') element.setAttribute('disabled', ''); else element.remove();
+    }
+  });
+}
 export function renderMarkdown(text: string, docId: string): string {
-  const clean = DOMPurify.sanitize(md.render(text), { USE_PROFILES: { html: true, mathMl: true }, ADD_ATTR: ['class', 'style'], FORBID_TAGS: ['style'], ALLOW_UNKNOWN_PROTOCOLS: false });
+  const clean = DOMPurify.sanitize(md.render(text), { USE_PROFILES: { html: true, mathMl: true }, ADD_ATTR: ['class', 'style'], FORBID_TAGS: forbiddenTags, ALLOW_UNKNOWN_PROTOCOLS: false });
   const template = document.createElement('template'); template.innerHTML = clean;
+  cleanPresentation(template.content);
   template.content.querySelectorAll('img').forEach(img => {
     const src = img.getAttribute('src') ?? '';
     if (/^(https:|data:image\/(png|jpeg|gif|webp);)/i.test(src)) return;
@@ -61,8 +97,18 @@ export function renderMarkdown(text: string, docId: string): string {
   return template.innerHTML;
 }
 export function headings(text: string) {
-  return md.parse(text, {}).flatMap((token, index, tokens) => token.type === 'heading_open'
-    ? [{ level: Number(token.tag.slice(1)), text: tokens[index + 1]?.content.replace(/[*_`]/g, '') ?? '', line: (token.map?.[0] ?? 0) + 1 }] : []);
+  return md.parse(text, {}).flatMap((token, index, tokens) => {
+    const template = document.createElement('template');
+    if (token.type === 'heading_open') {
+      template.innerHTML = DOMPurify.sanitize(md.renderInline(tokens[index + 1]?.content ?? ''));
+      return [{ level: Number(token.tag.slice(1)), text: template.content.textContent ?? '', line: (token.map?.[0] ?? 0) + 1 }];
+    }
+    if (token.type === 'html_block') {
+      template.innerHTML = DOMPurify.sanitize(annotateHTMLHeadings(token.content, token.map?.[0] ?? 0), { FORBID_TAGS: forbiddenTags });
+      return [...template.content.querySelectorAll('h1,h2,h3,h4,h5,h6')].map(element => ({ level: Number(element.tagName.slice(1)), text: element.textContent ?? '', line: Number(element.getAttribute('data-comd-line')) }));
+    }
+    return [];
+  });
 }
 const exportStyles = `body{max-width:780px;margin:48px auto;padding:0 24px;color:#263449;font:16px/1.85 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}h1,h2,h3{line-height:1.4;page-break-after:avoid}h1{font-size:32px}h2{margin-top:32px}a{color:#2864e8}blockquote{border-left:3px solid #8aaff8;margin:24px 0;padding:6px 20px;background:#f3f7ff;color:#56677e}pre{background:#f5f7fb;border:1px solid #e3eaf4;border-radius:8px;padding:18px;white-space:pre-wrap;overflow-wrap:anywhere}code{font:0.88em/1.7 ui-monospace,SFMono-Regular,Consolas,monospace}p code,li code{background:#edf3ff;padding:2px 5px;border-radius:4px}table{width:100%;border-collapse:collapse;margin:22px 0}td,th{border:1px solid #e3eaf4;padding:9px 14px;text-align:left}th{background:#f5f8fc}img{max-width:100%;height:auto}hr{border:0;border-top:1px solid #e3eaf4;margin:32px 0}.task-list-item{list-style:none}.task-list-item-checkbox{margin-right:8px}.katex-display{overflow:auto}.hljs-keyword,.hljs-selector-tag{color:#87549a}.hljs-string{color:#467549}.hljs-number{color:#bd753d}.hljs-comment{color:#7b8da6}@media print{body{margin:0;padding:0;font-size:11pt}a{color:inherit;text-decoration:none}pre,blockquote,tr,img{break-inside:avoid}thead{display:table-header-group}}`;
 async function dataURL(url: string): Promise<string> {
