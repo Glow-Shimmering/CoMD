@@ -7,6 +7,8 @@
   --muted: #708097; --subtle: #56677e; --line: #e7edf5;
   --brand: #2864e8; --accent: #5485ed; --on-brand: #ffffff;
   --shadow: 0 16px 52px #18365d18, 0 2px 8px #18365d08; --code: #f5f7fb;
+  /* CodeMirror draws selections behind text, so editor decorations must stay translucent. */
+  --editor-active-line: #5485ed0c; --editor-block: #6b89b914; --editor-selection: #3b82f638;
   color: var(--text); background: var(--bg);
 }
 
@@ -17,6 +19,7 @@
   --muted: #8c9eb7; --subtle: #aabbd2; --line: #2a384c;
   --brand: #8db4ff; --accent: #719eea; --on-brand: #11223e;
   --shadow: 0 16px 52px #0005; --code: #131e2e;
+  --editor-active-line: #8db4ff0f; --editor-block: #87a9de14; --editor-selection: #619bff59;
 }
 
 *{box-sizing:border-box}
@@ -122,12 +125,12 @@ kbd{font:10px/1.5 inherit;color:var(--muted)}
 .editor-host .cm-scroller{overflow:auto;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 .editor-host .cm-content{padding:42px 0 160px;max-width:800px;width:100%;margin:0 auto;min-height:100%}
 .editor-host .cm-line{padding:0 50px;line-height:1.95}
-.editor-host .cm-activeLine{background:var(--soft)}
+.editor-host .cm-activeLine{background:var(--editor-active-line)}
 .editor-host .cm-gutters{background:transparent;color:var(--muted);border:0;font-size:11px}
 .source-editor .cm-content{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:.88em}
 .source-editor .cm-line{padding-left:20px;padding-right:30px}
 .source-editor .cm-lineNumbers .cm-gutterElement{min-width:40px;padding-right:10px}
-.editor-host .cm-selectionBackground,.editor-host .cm-focused>.cm-scroller>.cm-selectionLayer .cm-selectionBackground{background:#3b82f638!important}
+.editor-host .cm-selectionBackground,.editor-host .cm-focused>.cm-scroller>.cm-selectionLayer .cm-selectionBackground{background:var(--editor-selection)!important}
 .editor-host .cm-searchMatch{background:#d3bd713b;outline:1px solid #b8995144}
 .editor-host .cm-searchMatch-selected{background:#dbb94c79}
 .editor-host .cm-md-heading{font-weight:650;letter-spacing:-.5px;color:var(--text);line-height:1.5;padding-top:24px;padding-bottom:14px}
@@ -137,10 +140,10 @@ kbd{font:10px/1.5 inherit;color:var(--muted)}
 .editor-host .cm-md-strong{font-weight:650;color:var(--text)}
 .editor-host .cm-md-em{font-style:italic}
 .editor-host .cm-md-strike{text-decoration:line-through}
-.editor-host .cm-md-code{font:0.87em/1.7 "SFMono-Regular",Consolas,monospace;background:var(--code);border-radius:3px;padding:2px 0;color:var(--brand)}
+.editor-host .cm-md-code{font:0.87em/1.7 "SFMono-Regular",Consolas,monospace;background:var(--editor-block);border-radius:3px;padding:2px 0;color:var(--brand)}
 .editor-host .cm-md-link{color:var(--brand);text-decoration:underline;text-decoration-color:#2864e866;text-underline-offset:4px}
-.editor-host .cm-md-quote{background:var(--soft);border-left:3px solid var(--accent);margin-left:50px;margin-right:50px;padding:10px 20px;color:var(--subtle);font-style:normal}
-.editor-host .cm-md-fence{background:var(--code);font:0.86em/1.9 "SFMono-Regular",Consolas,monospace;margin-left:50px;margin-right:50px;padding:2px 18px}
+.editor-host .cm-md-quote{background:var(--editor-block);border-left:3px solid var(--accent);margin-left:50px;margin-right:50px;padding:10px 20px;color:var(--subtle);font-style:normal}
+.editor-host .cm-md-fence{background:var(--editor-block);font:0.86em/1.9 "SFMono-Regular",Consolas,monospace;margin-left:50px;margin-right:50px;padding:2px 18px}
 .live-editor .cm-content{padding-bottom:180px}
 .mode-split .editor-pane{border-right:1px solid var(--line)}
 .mode-split .editor-host .cm-content{padding-top:26px}
@@ -345,9 +348,9 @@ select.text-tool { width: 72px; color: var(--subtle); }
 .editor-host .cm-md-heading { color: var(--heading); font-weight: 620; padding-top: 18px; padding-bottom: 8px; }
 .editor-host .cm-md-h1 { font-size: 1.8em; font-weight: 650; letter-spacing: -.8px; padding-top: 7px; padding-bottom: 15px; }
 .editor-host .cm-md-h2 { font-size: 1.3em; }
-.editor-host .cm-md-quote { background: var(--soft); border-left: 2px solid var(--accent); border-radius: 0 6px 6px 0; padding-top: 9px; padding-bottom: 9px; }
-.editor-host .cm-md-code { background: var(--code); border-radius: 4px; }
-.editor-host .cm-md-fence { background: var(--code); }
+.editor-host .cm-md-quote { background: var(--editor-block); border-left: 2px solid var(--accent); border-radius: 0 6px 6px 0; padding-top: 9px; padding-bottom: 9px; }
+.editor-host .cm-md-code { background: var(--editor-block); border-radius: 4px; }
+.editor-host .cm-md-fence { background: var(--editor-block); }
 .prose { max-width: 816px; padding-top: 38px; line-height: 1.85; }
 .prose h1,.prose h2,.prose h3,.prose h4 { color: var(--heading); font-weight: 620; }
 .prose h1 { font-size: 1.8em; letter-spacing: -.8px; font-weight: 650; margin-bottom: 24px; }

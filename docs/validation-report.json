@@ -4,6 +4,7 @@
     "Automatic update check after startup, quiet new-version indicator and safe release notes",
     "Manual checks, native menu, automatic preference, matching download and official release links",
     "Update offline/missing-release/current-version/missing-installer states and retry recovery",
+    "Visible selection pixels: same-line/multiline, source/split/live, light/dark, quote/code and mouse dragging",
     "Recent picker empty state and keyboard dismissal",
     "Live task checkbox edits Markdown; paragraph selector applies a heading at line start",
     "Separate document/outline views; nested folds, skipped levels, duplicate titles, navigation, keyboard and per-document state",
@@ -29,19 +30,19 @@
   "packagedMacApplicationTested": true,
   "realAIProviderTested": false,
   "packagedMacSmokeTested": true,
-  "packagedVersion": "0.3.2",
-  "liveUpdateServiceState": "unavailable",
+  "packagedVersion": "0.3.3",
+  "selectionPixelRegressionTested": true,
+  "originalSelectionBugReproduced": true,
   "visualReview": {
-    "updatePanel": true,
-    "updateDarkTheme": true,
-    "compactWidth": 900,
-    "horizontalOverflow": false
+    "sameLineSelection": true,
+    "crossLineSelection": true,
+    "lightAndDarkThemes": true,
+    "quoteAndCodeSelection": true
   },
-  "updateTestsUseMockRelease": true,
   "packageChecks": {
     "sameApplicationFiles": 184,
     "windowsX64Metadata": true,
-    "windowsVersion": "0.3.2.0",
+    "windowsVersion": "0.3.3.0",
     "macSignatureVerified": true,
     "windowsRuntimeTested": false
   }

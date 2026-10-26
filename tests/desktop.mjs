@@ -8,6 +8,7 @@ import { checkOutline } from './outline.mjs';
 import { checkWorkspace } from './workspace.mjs';
 import { checkRecent } from './recent.mjs';
 import { checkUpdates } from './updates.mjs';
+import { checkSelection } from './selection.mjs';
 
 const root = path.resolve('.'), output = path.join(root, 'test-results');
 await fs.mkdir(output, { recursive: true });
@@ -40,6 +41,8 @@ try {
   checks.push('Desktop boot, sandboxed renderer, welcome live editor');
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
   checks.push(...await checkUpdates(page, application, { until, output }));
+  await checkSelection(page, { setText, output });
+  checks.push('Visible selection pixels: same-line/multiline, source/split/live, light/dark, quote/code and mouse dragging');
   await page.getByRole('button', { name: '最近打开', exact: true }).click();
   await page.getByText('还没有最近打开的记录。打开文件或文件夹后，会出现在这里。').waitFor();
   await page.keyboard.press('Escape');

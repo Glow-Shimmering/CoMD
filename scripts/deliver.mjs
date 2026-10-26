@@ -4,36 +4,37 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 const root = path.resolve('.');
-const destination = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve('../../outputs/CoMD-0.3.2');
+const destination = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve('../../outputs/CoMD-0.3.3');
 await fs.mkdir(destination, { recursive: true });
 const artifacts = [
-  ['CoMD-0.3.2-mac-arm64.dmg','CoMD-0.3.2-macOS-AppleSilicon.dmg'],
-  ['CoMD-0.3.2-mac-arm64.zip','CoMD-0.3.2-macOS-AppleSilicon.zip'],
-  ['CoMD-0.3.2-Windows-x64-Setup.exe','CoMD-0.3.2-Windows-x64-Setup.exe'],
-  ['CoMD-0.3.2-win-x64.zip','CoMD-0.3.2-Windows-x64-Portable.zip']
+  ['CoMD-0.3.3-mac-arm64.dmg','CoMD-0.3.3-macOS-AppleSilicon.dmg'],
+  ['CoMD-0.3.3-mac-arm64.zip','CoMD-0.3.3-macOS-AppleSilicon.zip'],
+  ['CoMD-0.3.3-Windows-x64-Setup.exe','CoMD-0.3.3-Windows-x64-Setup.exe'],
+  ['CoMD-0.3.3-win-x64.zip','CoMD-0.3.3-Windows-x64-Portable.zip']
 ];
-for (const [source, target] of artifacts) await fs.copyFile(path.join(root, 'release', '0.3.2', source), path.join(destination, target));
+for (const [source, target] of artifacts) await fs.copyFile(path.join(root, 'release', '0.3.3', source), path.join(destination, target));
 await fs.copyFile('build/icon.png', path.join(destination, 'CoMD-icon.png'));
 await fs.copyFile('test-results/CoMD-light-live.png', path.join(destination, 'CoMD-light.png'));
 await fs.copyFile('test-results/CoMD-dark-reading.png', path.join(destination, 'CoMD-dark.png'));
 await fs.copyFile('test-results/CoMD-outline.png', path.join(destination, 'CoMD-outline.png'));
 await fs.copyFile('test-results/CoMD-folder-html.png', path.join(destination, 'CoMD-folder-html.png'));
 await fs.copyFile('test-results/CoMD-recent.png', path.join(destination, 'CoMD-recent.png'));
-await fs.copyFile('test-results/CoMD-updates.png', path.join(destination, 'CoMD-updates.png'));
+await fs.copyFile('test-results/CoMD-selection-light.png', path.join(destination, 'CoMD-selection-light.png'));
+await fs.copyFile('test-results/CoMD-selection-dark.png', path.join(destination, 'CoMD-selection-dark.png'));
 await fs.copyFile('docs/RELEASING.md', path.join(destination, '发布指南.md'));
 await fs.copyFile('test-results/desktop-report.json', 'docs/validation-report.json');
 await fs.copyFile('docs/VALIDATION.md', path.join(destination, '验证说明.md'));
-const usage = `# CoMD 0.3.2
+const usage = `# CoMD 0.3.3
 
 专注文字，自在表达。
 
-0.3.2：新增启动后自动检查更新、手动检查、版本说明与平台安装包下载入口。
+0.3.3：修复同行选中文字不高亮，改善引用、代码与深色主题的选区可见性。
 
 ## 安装
 
-**Mac（M 系列，macOS 13+）**：打开 CoMD-0.3.2-macOS-AppleSilicon.dmg，将 CoMD 拖入 Applications，然后从启动台/应用程序打开。ZIP 是同一应用的压缩版本。
+**Mac（M 系列，macOS 13+）**：打开 CoMD-0.3.3-macOS-AppleSilicon.dmg，将 CoMD 拖入 Applications，然后从启动台/应用程序打开。ZIP 是同一应用的压缩版本。
 
-**Windows（x64，Windows 10/11）**：运行 CoMD-0.3.2-Windows-x64-Setup.exe。若不想安装，解压 Portable.zip，进入目录双击 CoMD.exe；不要单独移动 EXE，旁边的资源文件必须一起保留。
+**Windows（x64，Windows 10/11）**：运行 CoMD-0.3.3-Windows-x64-Setup.exe。若不想安装，解压 Portable.zip，进入目录双击 CoMD.exe；不要单独移动 EXE，旁边的资源文件必须一起保留。
 
 当前版本未使用商业发布证书：Mac 为本机 ad-hoc 签名，未做 Apple 公证；Windows 安装包未签名。系统可能出现开发者身份提示。确认来源为本次交付后，可使用系统的“仍要打开/仍要运行”流程，不必关闭全局安全保护。
 
@@ -53,7 +54,7 @@ AI 为可选功能：配置自己的兼容 API、模型 ID 和 API Key，选中�
 
 默认启动约 10 秒后检查 GitHub 最新正式版本，运行期间每 6 小时复查。发现新版时，点击右上角“发现新版本”，或进入设置 → 更新。可以手动检查、关闭自动检查、查看更新说明及下载安装包。检查不发送文档内容；下载安装需手动确认。
 
-0.3.1 及更早版本需要先手动安装本次 0.3.2，之后才能检查后续版本。维护者发布时使用 v0.3.2 这样的标签，上传安装包并设为正式的最新 Release；详见发布指南.md。
+0.3.1 及更早版本需要先手动安装本次 0.3.3，之后才能检查后续版本；0.3.2 已支持检查更新。维护者发布时使用 v0.3.3 这样的标签，上传安装包并设为正式的最新 Release；详见发布指南.md。
 
 ## 验证与源码
 
@@ -68,7 +69,7 @@ try {
   for (const entry of ['src','electron','scripts','tests','docs','.github','package.json','package-lock.json','tsconfig.json','vite.config.ts','index.html','.gitignore','README.md','LICENSE','THIRD-PARTY-NOTICES.txt']) await fs.cp(path.join(root,entry),path.join(sourceRoot,entry),{recursive:true});
   await fs.mkdir(path.join(sourceRoot,'build'));
   for (const icon of ['icon.svg','icon.png','icon.icns','icon.ico']) await fs.copyFile(path.join(root,'build',icon),path.join(sourceRoot,'build',icon));
-  const zip = path.join(destination,'CoMD-0.3.2-Source.zip');
+  const zip = path.join(destination,'CoMD-0.3.3-Source.zip');
   execFileSync('ditto',['-c','-k','--keepParent',sourceRoot,zip]);
 } finally { await fs.rm(stage,{recursive:true,force:true}); }
 const names = (await fs.readdir(destination)).filter(name => !['SHA256SUMS.txt'].includes(name)).sort();
