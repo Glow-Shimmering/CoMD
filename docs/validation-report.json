@@ -1,0 +1,28 @@
+{
+  "passed": [
+    "Desktop boot, sandboxed renderer, welcome live editor",
+    "Live task checkbox edits Markdown; paragraph selector applies a heading at line start",
+    "Separate document/outline views; nested folds, skipped levels, duplicate titles, navigation, keyboard and per-document state",
+    "Native file open, typing, autosave, UTF-8 BOM / CRLF preservation",
+    "Clean document reloads external edits",
+    "Dirty conflict detected without overwriting; explicit reload resolves it",
+    "Sanitized Markdown, GFM tables, KaTeX, relative image rendering",
+    "Standalone HTML export with embedded image/fonts; actual PDF output",
+    "AI protocol via local mock, review-before-apply, selected-text payload",
+    "Undo history persists across tab switching",
+    "Quit/relaunch restores unsaved drafts and open documents"
+  ],
+  "rendererErrors": [],
+  "platform": "darwin",
+  "arch": "arm64",
+  "packagedMacApplicationTested": false,
+  "realAIProviderTested": false,
+  "packagedMacSmokeTested": true,
+  "packagedVersion": "0.2.1",
+  "visualReview": {
+    "documentTab": true,
+    "nestedOutline": true,
+    "compactWidth": 900,
+    "horizontalOverflow": false
+  }
+}
