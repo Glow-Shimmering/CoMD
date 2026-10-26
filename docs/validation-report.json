@@ -1,11 +1,13 @@
 {
   "passed": [
     "Desktop boot, sandboxed renderer, welcome live editor",
+    "Recent picker empty state and keyboard dismissal",
     "Live task checkbox edits Markdown; paragraph selector applies a heading at line start",
     "Separate document/outline views; nested folds, skipped levels, duplicate titles, navigation, keyboard and per-document state",
     "HTML mixed Markdown renders formatting, details, table and headings safely; export preserves presentation",
     "Folder tree: nested/empty folders, multiple files, refresh, duplicate-open protection and authorized paths",
     "Bidirectional split scrolling with wheel input, top/bottom alignment and stable feedback suppression",
+    "Recent files/folders: search, reopening, duplicate protection, missing paths and clean sidebar",
     "Native file open, typing, autosave, UTF-8 BOM / CRLF preservation",
     "Clean document reloads external edits",
     "Dirty conflict detected without overwriting; explicit reload resolves it",
@@ -14,19 +16,30 @@
     "AI protocol via local mock, review-before-apply, selected-text payload",
     "Undo history persists across tab switching",
     "Opened folder is restored after quit/relaunch",
+    "Recent file and folder history survives quit/relaunch",
     "Quit/relaunch restores unsaved drafts and open documents"
   ],
   "rendererErrors": [],
   "platform": "darwin",
   "arch": "arm64",
-  "packagedMacApplicationTested": false,
+  "packagedMacApplicationTested": true,
   "realAIProviderTested": false,
   "packagedMacSmokeTested": true,
-  "packagedVersion": "0.3.0",
+  "packagedVersion": "0.3.1",
+  "legacyHistoryMigrationTested": true,
   "visualReview": {
+    "recentPicker": true,
+    "cleanSidebar": true,
     "folderTree": true,
     "htmlAndMath": true,
     "compactWidth": 900,
     "horizontalOverflow": false
+  },
+  "packageChecks": {
+    "sameApplicationFiles": 183,
+    "windowsX64Metadata": true,
+    "windowsVersion": "0.3.1.0",
+    "macSignatureVerified": true,
+    "windowsRuntimeTested": false
   }
 }

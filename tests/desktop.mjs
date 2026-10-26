@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { checkOutline } from './outline.mjs';
 import { checkWorkspace } from './workspace.mjs';
+import { checkRecent } from './recent.mjs';
 
 const root = path.resolve('.'), output = path.join(root, 'test-results');
 await fs.mkdir(output, { recursive: true });
@@ -37,6 +38,10 @@ try {
   await page.screenshot({ path: path.join(output, 'CoMD-light-live.png') });
   checks.push('Desktop boot, sandboxed renderer, welcome live editor');
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
+  await page.getByRole('button', { name: '最近打开', exact: true }).click();
+  await page.getByText('还没有最近打开的记录。打开文件或文件夹后，会出现在这里。').waitFor();
+  await page.keyboard.press('Escape');
+  checks.push('Recent picker empty state and keyboard dismissal');
   await page.getByRole('button', { name: '阅读', exact: true }).click();
   await page.locator('.prose table').waitFor(); assert.equal(await page.locator('.prose .katex').count(), 1);
   await page.screenshot({ path: path.join(output, 'CoMD-light-reading.png') });
@@ -58,6 +63,8 @@ try {
   await checkOutline(page, { setText, until, output });
   checks.push('Separate document/outline views; nested folds, skipped levels, duplicate titles, navigation, keyboard and per-document state');
   checks.push(...await checkWorkspace(page, application, { temp, output, setText, until, exportViaUI }));
+  await checkRecent(page, application, { temp, until, output });
+  checks.push('Recent files/folders: search, reopening, duplicate protection, missing paths and clean sidebar');
   await application.evaluate(({ dialog }, target) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [target] }); }, file);
   await page.getByRole('button', { name: /打开文件/ }).first().click();
   await until(async () => (await page.locator('.cm-content').innerText()).includes('原始内容'), 'open native file');
@@ -117,6 +124,12 @@ try {
   assert.match(await page.locator('.cm-content').innerText(), /跨重启保留/);
   await page.getByRole('navigation', { name: '文件夹树' }).getByRole('button', { name: '收起文件夹 写作资料库', exact: true }).waitFor();
   checks.push('Opened folder is restored after quit/relaunch');
+  await page.getByRole('button', { name: '最近打开', exact: true }).click();
+  await page.locator('.recent-entry').first().waitFor();
+  const recentKinds = await page.locator('.recent-kind').allTextContents();
+  assert.ok(recentKinds.includes('文件') && recentKinds.includes('文件夹'));
+  await page.keyboard.press('Escape');
+  checks.push('Recent file and folder history survives quit/relaunch');
   checks.push('Quit/relaunch restores unsaved drafts and open documents');
   assert.deepEqual(errors, []);
   await fs.writeFile(path.join(output, 'desktop-report.json'), JSON.stringify({ passed: checks, rendererErrors: errors, platform: process.platform, arch: process.arch, packagedMacApplicationTested: !!process.env.COMD_EXECUTABLE, realAIProviderTested: false }, null, 2));

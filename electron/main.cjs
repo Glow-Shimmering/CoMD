@@ -5,11 +5,12 @@ const { pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const { readDocument, writeDocument, atomicWrite, within } = require('./files.cjs');
 const { folderInfo, listFolder, folderDocument } = require('./folders.cjs');
+const { normalizeRecent, rememberRecent } = require('./recent.cjs');
 
 app.setName('CoMD');
 if (process.env.COMD_TEST_DIR) app.setPath('userData', process.env.COMD_TEST_DIR);
 protocol.registerSchemesAsPrivileged([{ scheme: 'comd-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
-let win, state = { docs: [], activeId: null, recent: [], preferences: {}, folder: null }, closing = false, pollBusy = false, quitting = false;
+let win, state = { docs: [], activeId: null, recent: [], recentItems: [], preferences: {}, folder: null }, closing = false, pollBusy = false, quitting = false;
 const records = new Map();
 let stateQueue = Promise.resolve(), saveQueue = Promise.resolve();
 const dataFile = () => path.join(app.getPath('userData'), 'workspace.json');
@@ -25,16 +26,29 @@ async function checkpoint() {
   });
   return stateQueue;
 }
-function remember(filePath) { state.recent = [filePath, ...state.recent.filter(p => p !== filePath)].slice(0, 20); }
+function rememberItem(item) {
+  state.recentItems = rememberRecent(state.recentItems, item);
+  // Keep the old file-only field readable by earlier CoMD versions.
+  state.recent = state.recentItems.filter(entry => entry.kind === 'file').map(entry => entry.path);
+}
+function remember(filePath) { rememberItem({ kind: 'file', path: filePath }); }
+async function selectFolder(directory) {
+  state.folder = await folderInfo(directory);
+  rememberItem({ kind: 'folder', path: state.folder.path });
+  await checkpoint(); return state.folder;
+}
 function snapshot(id, record, content = record.content) {
   return { id, path: record.path, title: path.basename(record.path), content, savedContent: record.content, baseHash: record.baseHash, eol: record.eol, bom: record.bom };
 }
 async function openPath(filePath) {
   const realPath = await fs.realpath(filePath);
-  for (const [id, record] of records) if (record.path === realPath) return { ...snapshot(id, record), existing: true };
+  for (const [id, record] of records) if (record.path === realPath) {
+    remember(realPath); await checkpoint(); return { ...snapshot(id, record), existing: true };
+  }
   const disk = await readDocument(realPath), id = randomUUID();
   const record = { path: realPath, ...disk, baseHash: disk.hash, observedHash: disk.hash };
   records.set(id, record); remember(realPath);
+  await checkpoint();
   return snapshot(id, record);
 }
 function handle(channel, callback) {
@@ -63,11 +77,15 @@ function installHandlers() {
     if (!state.recent.includes(file)) throw new Error('该文件不在最近打开列表中。');
     return openPath(file);
   });
+  handle('list-recent', () => state.recentItems);
+  handle('open-recent-folder', async directory => {
+    if (!state.recentItems.some(item => item.kind === 'folder' && item.path === directory)) throw new Error('该文件夹不在最近打开列表中。');
+    return selectFolder(directory);
+  });
   handle('open-folder', async () => {
     const result = await dialog.showOpenDialog(win, { title: '打开文件夹', properties: ['openDirectory'] });
     if (result.canceled || !result.filePaths[0]) return null;
-    state.folder = await folderInfo(result.filePaths[0]);
-    await checkpoint(); return state.folder;
+    return selectFolder(result.filePaths[0]);
   });
   handle('list-folder', directory => listFolder(state.folder?.path, directory));
   handle('open-folder-file', async file => openPath(await folderDocument(state.folder?.path, file)));
@@ -177,6 +195,8 @@ function menu() {
 }
 async function restore() {
   try { state = { ...state, ...JSON.parse(await fs.readFile(dataFile(), 'utf8')) }; } catch {}
+  state.recentItems = normalizeRecent(state.recentItems, state.recent, state.folder);
+  state.recent = state.recentItems.filter(item => item.kind === 'file').map(item => item.path);
   for (const doc of state.docs) {
     if (!doc.path) continue;
     try {

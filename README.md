@@ -2,6 +2,10 @@
 
 专注文字，自在表达。基于 Electron、React、TypeScript 和 CodeMirror 6 独立实现的本地 Markdown 桌面应用。
 
+## 0.3.1 最近打开更新
+
+侧栏移除“已打开”和最近文件列表，在“打开文件夹”下新增“最近打开”。弹窗统一展示最近使用的文件和文件夹，显示完整路径提示并支持搜索；选择文件打开标签，选择文件夹恢复目录树。历史记录在重启后保留，自动迁移旧版的最近文件与当前文件夹。
+
 ## 0.3.0 文件夹与渲染更新
 
 - 双栏支持双向滚动同步：滚动源码或预览，另一侧按滚动比例跟随，不改变光标选区。
@@ -19,11 +23,11 @@
 
 ## 使用
 
-- **macOS Apple Silicon**：打开发布目录 `release/0.3.0/` 里的 DMG，把 CoMD 拖入 Applications；也可以解压 macOS ZIP 后打开 CoMD.app。适用于 M 系列芯片，macOS 13 或更新版本。
+- **macOS Apple Silicon**：打开发布目录 `release/0.3.1/` 里的 DMG，把 CoMD 拖入 Applications；也可以解压 macOS ZIP 后打开 CoMD.app。适用于 M 系列芯片，macOS 13 或更新版本。
 - **Windows x64**：解压 Windows ZIP 到一个固定目录，双击 CoMD.exe。请保留同目录的 DLL、resources 等配套文件。适用于 Windows 10/11 的 x64 设备。若提供 Setup.exe，也可用安装向导安装。
 - 本地编辑无需账号与网络。首次打开会显示可编辑的欢迎文档。按 Cmd/Ctrl+O 打开自己的文件，Cmd/Ctrl+S 保存。
 
-这是 0.3.0 文件夹与渲染更新版。macOS 使用本机 ad-hoc 签名，未进行 Apple Developer ID 签名/公证；Windows 未使用商业代码签名证书。系统可能显示未识别开发者的提示。确认文件来自本次构建后，按系统提供的“仍要打开/仍要运行”流程处理；不要关闭整个系统的安全保护。
+这是 0.3.1 最近打开更新版。macOS 使用本机 ad-hoc 签名，未进行 Apple Developer ID 签名/公证；Windows 未使用商业代码签名证书。系统可能显示未识别开发者的提示。确认文件来自本次构建后，按系统提供的“仍要打开/仍要运行”流程处理；不要关闭整个系统的安全保护。
 
 ## 功能
 
@@ -31,7 +35,7 @@
 | --- | --- |
 | 实时排版、源码、双栏、阅读 | 已实现 |
 | 标题、强调、引用、代码、任务列表 | 已实现；表格/图片/公式完整渲染在双栏与阅读模式 |
-| 文件夹树、本地多标签、最近文件、分层大纲折叠与跳转、查找替换 | 已实现 |
+| 文件夹树、本地多标签、最近文件/文件夹搜索、分层大纲折叠与跳转、查找替换 | 已实现 |
 | 双栏双向滚动、Markdown 内嵌 HTML 与行内样式 | 已实现 |
 | 深浅主题、跟随系统、字号、专注模式 | 已实现 |
 | 自动保存、未命名草稿恢复 | 已实现 |
@@ -86,7 +90,7 @@ npm run dist:win:installer # Windows x64 NSIS 安装器，推荐 Windows runner
 
 ## 验证范围
 
-`tests/files.test.cjs` 验证 BOM/换行、备份、外部修改冲突、非 UTF-8 拒绝和路径边界。`tests/desktop.mjs` 使用真实 Electron 窗口和临时数据目录，验证文件夹与路径边界、HTML 混排和过滤、双栏双向滚动、大纲分层折叠、文档间状态保持、输入、磁盘保存、冲突、图片/公式、HTML/PDF、标签页撤销、重启恢复，以及本机模拟 API 的 AI 修改流程。测试报告与截图位于 `test-results/`。
+`tests/*.test.cjs` 验证 BOM/换行、备份、外部修改冲突、非 UTF-8 拒绝、目录边界和历史记录迁移。`tests/desktop.mjs` 使用真实 Electron 窗口和临时数据目录，验证最近文件/文件夹搜索与恢复、文件夹与路径边界、HTML 混排和过滤、双栏双向滚动、大纲分层折叠、文档间状态保持、输入、磁盘保存、冲突、图片/公式、HTML/PDF、标签页撤销、重启恢复，以及本机模拟 API 的 AI 修改流程。测试报告与截图位于 `test-results/`。
 
 真实 API 服务需要用户自行配置后测试；Windows 在本机只能完成构建和包结构验证，不能代替 Windows 真机验收。自动保存对外部写入有检查，但不提供跨进程文件锁，避免与另一个编辑器持续同时写同一文档。首版未提供 Mermaid 图渲染、云同步、协同编辑或自动更新。
 
@@ -95,6 +99,8 @@ npm run dist:win:installer # Windows x64 NSIS 安装器，推荐 Windows runner
 - `electron/main.cjs`：桌面窗口、菜单、隔离 IPC、文件授权、AI、导出。
 - `electron/files.cjs`：原子写入、编码、冲突、备份。
 - `src/Editor.tsx`：CodeMirror 与实时 Markdown 装饰。
+- `electron/recent.cjs`：最近文件/文件夹排序、去重与旧版迁移。
+- `src/RecentPicker.tsx`：最近打开弹窗与搜索。
 - `electron/folders.cjs`：文件夹授权边界与目录读取。
 - `src/FileTree.tsx`：按需展开的文件夹树。
 - `src/Outline.tsx`：分层大纲、独立折叠与标题跳转。

@@ -4,33 +4,34 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 const root = path.resolve('.');
-const destination = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve('../../outputs/CoMD-0.3.0');
+const destination = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve('../../outputs/CoMD-0.3.1');
 await fs.mkdir(destination, { recursive: true });
 const artifacts = [
-  ['CoMD-0.3.0-mac-arm64.dmg','CoMD-0.3.0-macOS-AppleSilicon.dmg'],
-  ['CoMD-0.3.0-mac-arm64.zip','CoMD-0.3.0-macOS-AppleSilicon.zip'],
-  ['CoMD-0.3.0-Windows-x64-Setup.exe','CoMD-0.3.0-Windows-x64-Setup.exe'],
-  ['CoMD-0.3.0-win-x64.zip','CoMD-0.3.0-Windows-x64-Portable.zip']
+  ['CoMD-0.3.1-mac-arm64.dmg','CoMD-0.3.1-macOS-AppleSilicon.dmg'],
+  ['CoMD-0.3.1-mac-arm64.zip','CoMD-0.3.1-macOS-AppleSilicon.zip'],
+  ['CoMD-0.3.1-Windows-x64-Setup.exe','CoMD-0.3.1-Windows-x64-Setup.exe'],
+  ['CoMD-0.3.1-win-x64.zip','CoMD-0.3.1-Windows-x64-Portable.zip']
 ];
-for (const [source, target] of artifacts) await fs.copyFile(path.join(root, 'release', '0.3.0', source), path.join(destination, target));
+for (const [source, target] of artifacts) await fs.copyFile(path.join(root, 'release', '0.3.1', source), path.join(destination, target));
 await fs.copyFile('build/icon.png', path.join(destination, 'CoMD-icon.png'));
 await fs.copyFile('test-results/CoMD-light-live.png', path.join(destination, 'CoMD-light.png'));
 await fs.copyFile('test-results/CoMD-dark-reading.png', path.join(destination, 'CoMD-dark.png'));
 await fs.copyFile('test-results/CoMD-outline.png', path.join(destination, 'CoMD-outline.png'));
 await fs.copyFile('test-results/CoMD-folder-html.png', path.join(destination, 'CoMD-folder-html.png'));
+await fs.copyFile('test-results/CoMD-recent.png', path.join(destination, 'CoMD-recent.png'));
 await fs.copyFile('test-results/desktop-report.json', 'docs/validation-report.json');
 await fs.copyFile('docs/VALIDATION.md', path.join(destination, '验证说明.md'));
-const usage = `# CoMD 0.3.0
+const usage = `# CoMD 0.3.1
 
 专注文字，自在表达。
 
-0.3.0：双栏双向滚动、Markdown 内嵌 HTML 与行内样式、可展开的文件夹树。
+0.3.1：侧栏移除已打开列表，新增统一的最近文件/文件夹选择弹窗与搜索。
 
 ## 安装
 
-**Mac（M 系列，macOS 13+）**：打开 CoMD-0.3.0-macOS-AppleSilicon.dmg，将 CoMD 拖入 Applications，然后从启动台/应用程序打开。ZIP 是同一应用的压缩版本。
+**Mac（M 系列，macOS 13+）**：打开 CoMD-0.3.1-macOS-AppleSilicon.dmg，将 CoMD 拖入 Applications，然后从启动台/应用程序打开。ZIP 是同一应用的压缩版本。
 
-**Windows（x64，Windows 10/11）**：运行 CoMD-0.3.0-Windows-x64-Setup.exe。若不想安装，解压 Portable.zip，进入目录双击 CoMD.exe；不要单独移动 EXE，旁边的资源文件必须一起保留。
+**Windows（x64，Windows 10/11）**：运行 CoMD-0.3.1-Windows-x64-Setup.exe。若不想安装，解压 Portable.zip，进入目录双击 CoMD.exe；不要单独移动 EXE，旁边的资源文件必须一起保留。
 
 当前版本未使用商业发布证书：Mac 为本机 ad-hoc 签名，未做 Apple 公证；Windows 安装包未签名。系统可能出现开发者身份提示。确认来源为本次交付后，可使用系统的“仍要打开/仍要运行”流程，不必关闭全局安全保护。
 
@@ -38,7 +39,7 @@ const usage = `# CoMD 0.3.0
 
 按 Cmd/Ctrl+O 打开 Markdown，Cmd/Ctrl+N 新建，Cmd/Ctrl+S 保存。支持实时排版、源码、双栏和阅读四种模式。表格、图片与公式在双栏/阅读模式中完整显示。
 
-Cmd/Ctrl+Shift+O 打开文件夹，在“文件”侧栏展开目录，点击文件打开新标签页；文件夹可刷新，重启后恢复。侧栏同时保留已打开文件与最近文件，“大纲”展示标题树。点击标题左侧箭头折叠/展开下级，点击标题文字跳转；切换文档会保留本次运行中的折叠状态。
+Cmd/Ctrl+Shift+O 打开文件夹，在“文件”侧栏展开目录，点击文件打开新标签页；文件夹可刷新，重启后恢复。点击“打开文件夹”下方的“最近打开”，搜索并选择最近使用的文件或文件夹；已打开文档通过顶部标签切换。“大纲”展示标题树。点击标题左侧箭头折叠/展开下级，点击标题文字跳转；切换文档会保留本次运行中的折叠状态。
 
 双栏支持双向滚动同步。Markdown 中的常见 HTML 标签（div、span、table、details、font 等）及颜色、字体、对齐等行内样式在双栏/阅读/导出中显示；实时和源码模式保留标签。脚本、iframe 和页面样式表不执行。
 
@@ -59,7 +60,7 @@ try {
   for (const entry of ['src','electron','scripts','tests','docs','.github','package.json','package-lock.json','tsconfig.json','vite.config.ts','index.html','.gitignore','README.md','LICENSE','THIRD-PARTY-NOTICES.txt']) await fs.cp(path.join(root,entry),path.join(sourceRoot,entry),{recursive:true});
   await fs.mkdir(path.join(sourceRoot,'build'));
   for (const icon of ['icon.svg','icon.png','icon.icns','icon.ico']) await fs.copyFile(path.join(root,'build',icon),path.join(sourceRoot,'build',icon));
-  const zip = path.join(destination,'CoMD-0.3.0-Source.zip');
+  const zip = path.join(destination,'CoMD-0.3.1-Source.zip');
   execFileSync('ditto',['-c','-k','--keepParent',sourceRoot,zip]);
 } finally { await fs.rm(stage,{recursive:true,force:true}); }
 const names = (await fs.readdir(destination)).filter(name => !['SHA256SUMS.txt'].includes(name)).sort();

@@ -1,0 +1,56 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+
+export async function checkRecent(page, application, { temp, until, output }) {
+  const show = async () => { await page.getByRole('button', { name: '最近打开', exact: true }).click(); await page.locator('.recent-entry').first().waitFor(); };
+  const picker = page.getByRole('dialog', { name: '最近打开', exact: true });
+  const select = name => picker.locator('.recent-entry').filter({ has: page.getByText(name, { exact: true }) }).click();
+  const search = text => picker.getByRole('textbox', { name: '搜索最近打开' }).fill(text);
+  assert.equal(await page.locator('.sidebar .document-list').count(), 0);
+  assert.doesNotMatch(await page.locator('.sidebar-content').innerText(), /已打开|最近打开/);
+  const folderButton = await page.getByRole('button', { name: /打开文件夹/ }).boundingBox();
+  const recentButton = await page.getByRole('button', { name: '最近打开', exact: true }).boundingBox();
+  assert.ok(recentButton.y > folderButton.y);
+  await page.getByRole('button', { name: '关闭文件夹', exact: true }).click();
+  await page.getByRole('navigation', { name: '文件夹树' }).waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: '关闭 混排.md', exact: true }).click();
+  await page.locator('.tab-label').filter({ hasText: '混排.md' }).waitFor({ state: 'detached' });
+  await show();
+  assert.ok((await picker.locator('.recent-kind').allTextContents()).includes('文件夹'));
+  await search('找不到这个文件xyz'); await picker.getByText('没有匹配的文件或文件夹。').waitFor();
+  await search('混排.md'); await select('混排.md'); await picker.waitFor({ state: 'detached' });
+  await until(async () => (await page.locator('.cm-content').innerText()).includes('HTML 混排笔记'), 'reopen file from history');
+  await show(); await search('混排.md'); await select('混排.md'); await picker.waitFor({ state: 'detached' });
+  assert.equal(await page.locator('.tab-label').filter({ hasText: '混排.md' }).count(), 1);
+  const tabCount = await page.locator('.tab-label').count();
+  await show(); await search('写作资料库'); await select('写作资料库'); await picker.waitFor({ state: 'detached' });
+  await page.getByRole('navigation', { name: '文件夹树' }).getByRole('button', { name: '收起文件夹 写作资料库', exact: true }).waitFor();
+  assert.equal(await page.locator('.tab-label').count(), tabCount, 'Selecting a recent folder preserves open tabs');
+  await show();
+  assert.equal(await picker.locator('.recent-entry strong').first().innerText(), '写作资料库');
+  await page.waitForTimeout(200); await page.screenshot({ path: path.join(output, 'CoMD-recent.png') });
+  await page.keyboard.press('Escape'); await picker.waitFor({ state: 'detached' });
+  const denied = await page.evaluate(directory => window.comd.openRecentFolder(directory), temp); assert.equal(denied.ok, false);
+
+  const goneFile = path.join(temp, '已移动的文件.md'); await fs.writeFile(goneFile, '# 临时');
+  await application.evaluate(({ dialog }, file) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] }); }, goneFile);
+  await page.getByRole('button', { name: /打开文件/ }).first().click();
+  await page.locator('.tab-label').filter({ hasText: '已移动的文件.md' }).waitFor();
+  await page.getByRole('button', { name: '关闭 已移动的文件.md', exact: true }).click();
+  await page.locator('.tab-label').filter({ hasText: '已移动的文件.md' }).waitFor({ state: 'detached' });
+  await fs.rm(goneFile);
+  await show(); await search('已移动的文件'); await select('已移动的文件.md');
+  await picker.getByRole('alert').waitFor(); assert.match(await picker.getByRole('alert').innerText(), /无法打开/);
+  await page.keyboard.press('Escape'); await picker.waitFor({ state: 'detached' });
+  const goneFolder = path.join(temp, '已移动的文件夹'); await fs.mkdir(goneFolder);
+  await application.evaluate(({ dialog }, folder) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] }); }, goneFolder);
+  await page.getByRole('button', { name: /打开文件夹/ }).click();
+  await page.getByRole('button', { name: '收起文件夹 已移动的文件夹', exact: true }).waitFor();
+  await page.getByRole('button', { name: '关闭文件夹', exact: true }).click();
+  await page.getByRole('navigation', { name: '文件夹树' }).waitFor({ state: 'detached' });
+  await fs.rm(goneFolder, { recursive: true });
+  await show(); await search('已移动的文件夹'); await select('已移动的文件夹');
+  await picker.getByRole('alert').waitFor();
+  await search('写作资料库'); await select('写作资料库'); await picker.waitFor({ state: 'detached' });
+}

@@ -1,7 +1,7 @@
 {
   "name": "comd",
   "productName": "CoMD",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A calm, local-first Markdown workspace",
   "author": "CoMD",
   "license": "MIT",
@@ -23,7 +23,7 @@
     "appId": "app.comd.editor",
     "productName": "CoMD",
     "directories": {
-      "output": "release/0.3.0",
+      "output": "release/0.3.1",
       "buildResources": "build"
     },
     "files": [

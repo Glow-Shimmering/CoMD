@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowUpRight, FileText, Plus, FolderOpen, PanelLeftClose, PanelLeftOpen, Search, Settings, Sun, Moon, MoreHorizontal, Check, X, Columns2, Code2, Eye, PenLine, Bold, Italic, Link, List, Quote, Braces, Sparkles, ArrowRight, ChevronDown, Focus, Download, Save, Circle, LoaderCircle, AlertTriangle, CornerDownLeft, ChevronRight } from 'lucide-react';
+import { ArrowUpRight, History, FileText, Plus, FolderOpen, PanelLeftClose, PanelLeftOpen, Search, Settings, Sun, Moon, MoreHorizontal, Check, X, Columns2, Code2, Eye, PenLine, Bold, Italic, Link, List, Quote, Braces, Sparkles, ArrowRight, ChevronDown, Focus, Download, Save, Circle, LoaderCircle, AlertTriangle, CornerDownLeft, ChevronRight } from 'lucide-react';
 import BrandMark from './BrandMark';
 import Outline from './Outline';
 import FileTree from './FileTree';
+import RecentPicker from './RecentPicker';
 import { Editor, forgetEditor, type EditorHandle } from './Editor';
 import { renderMarkdown, headings, exportHTML } from './markdown';
 import { welcome, guide } from './welcome';
-import { unwrap, type DocumentState, type Preferences, type AIConfig, type Folder } from './types';
+import { unwrap, type DocumentState, type Preferences, type AIConfig, type Folder, type RecentItem } from './types';
 
 const noCollapsedHeadings: ReadonlySet<string> = new Set();
 const initialPreferences: Preferences = { theme: 'light', mode: 'live', fontSize: 16, autosave: true, sidebar: true };
@@ -19,7 +20,8 @@ function Modal({ title, children, onClose }: { title: string; children: ReactNod
 export default function App() {
   const [docs, setDocs] = useState<DocumentState[]>([]), [activeId, setActiveId] = useState('');
   const [preferences, setPreferences] = useState<Preferences>(initialPreferences), [ready, setReady] = useState(false);
-  const [recent, setRecent] = useState<string[]>([]), [sidebarTab, setSidebarTab] = useState<'files' | 'outline'>('files');
+  const [showRecent, setShowRecent] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<'files' | 'outline'>('files');
   const [folder, setFolder] = useState<Folder | null>(null), [folderRevision, setFolderRevision] = useState(0);
   const synchronizedPreviewTop = useRef<number | null>(null);
   const [collapsedOutlines, setCollapsedOutlines] = useState<Record<string, ReadonlySet<string>>>({});
@@ -36,7 +38,6 @@ export default function App() {
   const active = docs.find(doc => doc.id === activeId) ?? docs[0];
   const dark = preferences.theme === 'dark' || (preferences.theme === 'system' && systemDark);
   const outline = useMemo(() => headings(active?.content ?? ''), [active?.content]);
-  const recentFiles = recent.filter(file => !docs.some(doc => doc.path === file)).slice(0, 8);
   const toggleOutline = (key: string) => {
     if (!active) return;
     setCollapsedOutlines(previous => {
@@ -51,7 +52,7 @@ export default function App() {
   const fail = (error: unknown) => notify(error instanceof Error ? error.message : String(error));
   const changePreference = <K extends keyof Preferences>(key: K, value: Preferences[K]) => setPreferences(previous => ({ ...previous, [key]: value }));
   const updateDoc = (id: string, patch: Partial<DocumentState> | ((doc: DocumentState) => Partial<DocumentState>)) => setDocs(previous => previous.map(doc => doc.id === id ? { ...doc, ...(typeof patch === 'function' ? patch(doc) : patch) } : doc));
-  const addDoc = (doc: DocumentState) => { setDocs(previous => previous.some(item => item.id === doc.id) ? previous : [...previous, doc]); setActiveId(doc.id); if (doc.path) setRecent(previous => [doc.path!, ...previous.filter(path => path !== doc.path)].slice(0, 20)); };
+  const addDoc = (doc: DocumentState) => { setDocs(previous => previous.some(item => item.id === doc.id) ? previous : [...previous, doc]); setActiveId(doc.id); };
   const persist = async () => { await unwrap(window.comd.persist(state.current)); };
   async function saveDoc(id: string, saveAs = false, force = false): Promise<boolean> {
     const pending = inFlight.current.get(id); if (pending) return pending;
@@ -63,7 +64,6 @@ export default function App() {
         if (result.canceled) return false;
         if (result.conflict) { updateDoc(id, { conflict: { disk: result.disk ?? null }, error: undefined }); return false; }
         updateDoc(id, current => ({ ...result, content: current.content, savedContent: doc.content, conflict: undefined, error: undefined }));
-        setRecent(previous => [result.path!, ...previous.filter(path => path !== result.path)].slice(0, 20));
         setFolderRevision(value => value + 1);
         return true;
       } catch (error) { updateDoc(id, { error: error instanceof Error ? error.message : String(error) }); fail(error); return false; }
@@ -72,12 +72,17 @@ export default function App() {
     inFlight.current.set(id, operation); return operation;
   }
   async function open() { try { (await unwrap(window.comd.open())).forEach(addDoc); } catch (error) { fail(error); } }
+  function activateFolder(next: Folder) { setFolder(next); setFolderRevision(value => value + 1); setSidebarTab('files'); changePreference('sidebar', true); setFocus(false); }
   async function openFolder() {
-    try { const next = await unwrap(window.comd.openFolder()); if (next) { setFolder(next); setFolderRevision(value => value + 1); setSidebarTab('files'); changePreference('sidebar', true); } } catch (error) { fail(error); }
+    try { const next = await unwrap(window.comd.openFolder()); if (next) activateFolder(next); } catch (error) { fail(error); }
   }
   async function closeFolder() { try { await unwrap(window.comd.closeFolder()); setFolder(null); } catch (error) { fail(error); } }
   async function openFolderFile(file: string) { try { addDoc(await unwrap(window.comd.openFolderFile(file))); } catch (error) { fail(error); } }
-  async function openRecent(file: string) { try { addDoc(await unwrap(window.comd.openRecent(file))); } catch (error) { fail(error); } }
+  async function openRecent(item: RecentItem) {
+    if (item.kind === 'folder') activateFolder(await unwrap(window.comd.openRecentFolder(item.path)));
+    else addDoc(await unwrap(window.comd.openRecent(item.path)));
+    setShowRecent(false);
+  }
   async function reloadDoc(id: string) { try { updateDoc(id, { ...await unwrap(window.comd.reload(id)), conflict: undefined, error: undefined }); } catch (error) { fail(error); } }
   async function removeDoc(id: string) {
     if (inFlight.current.has(id)) await inFlight.current.get(id);
@@ -134,7 +139,7 @@ export default function App() {
     if (!window.comd) { notify('请通过 CoMD 桌面应用打开此界面。'); return; }
     unwrap(window.comd.bootstrap()).then(data => {
       const initial = data.docs.length ? data.docs : [createDoc(welcome, '欢迎使用 CoMD.md')];
-      setDocs(initial); setActiveId(data.activeId || initial[0].id); setRecent(data.recent); setFolder(data.folder ?? null); setPreferences({ ...initialPreferences, ...data.preferences }); setReady(true);
+      setDocs(initial); setActiveId(data.activeId || initial[0].id); setFolder(data.folder ?? null); setPreferences({ ...initialPreferences, ...data.preferences }); setReady(true);
     }).catch(fail);
     const offAction = window.comd.onAction(action => actions.current(action));
     const offOpened = window.comd.onOpened(addDoc);
@@ -161,7 +166,7 @@ export default function App() {
   useEffect(() => { if (showSettings) unwrap(window.comd.aiSettings()).then(setAIConfig).catch(fail); }, [showSettings]);
   useEffect(() => { setCursor({ line: 1, col: 1, selected: 0 }); }, [activeId]);
   useEffect(() => {
-    const listener = (event: KeyboardEvent) => { if (event.key === 'Escape') { setMenu(false); if (!ai?.busy) setAI(null); setShowSettings(false); setCloseTarget(null); } };
+    const listener = (event: KeyboardEvent) => { if (event.key === 'Escape') { setMenu(false); setShowRecent(false); if (!ai?.busy) setAI(null); setShowSettings(false); setCloseTarget(null); } };
     window.addEventListener('keydown', listener); return () => window.removeEventListener('keydown', listener);
   }, [ai?.busy]);
   useEffect(() => { synchronizedPreviewTop.current = null; }, [activeId, preferences.mode]);
@@ -188,16 +193,11 @@ export default function App() {
         <button className="new-document" onClick={() => addDoc(createDoc())}><Plus size={17}/><span>新建文档</span><kbd>{mod} N</kbd></button>
         <button className="open-document" onClick={() => void open()}><FileText size={16}/><span>打开文件</span><kbd>{mod} O</kbd></button>
         <button className="open-document open-folder" onClick={() => void openFolder()}><FolderOpen size={16}/><span>打开文件夹</span><kbd>{mod} ⇧ O</kbd></button>
+        <button className="open-document open-recent" onClick={() => setShowRecent(true)}><History size={16}/><span>最近打开</span><ChevronRight size={14} className="recent-trigger-chevron"/></button>
         <div className="sidebar-switch"><button aria-pressed={sidebarTab === 'files'} className={sidebarTab === 'files' ? 'selected' : ''} onClick={() => setSidebarTab('files')}>文件</button><button aria-pressed={sidebarTab === 'outline'} className={sidebarTab === 'outline' ? 'selected' : ''} onClick={() => setSidebarTab('outline')}>大纲 <span>{outline.length}</span></button></div>
         <div className="sidebar-content">
           <div hidden={sidebarTab !== 'files'}>
             {folder ? <FileTree key={folder.path} folder={folder} activePath={active?.path ?? null} docs={docs} onOpen={file => void openFolderFile(file)} onClose={() => void closeFolder()} revision={folderRevision}/> : <p className="folder-hint">打开文件夹，在这里浏览文档。</p>}
-            <div className="section-label">已打开 <span>{docs.length}</span></div>
-            <div className="document-list">{docs.map(doc => <button key={doc.id} className={`document-item ${doc.id === activeId ? 'active' : ''}`} onClick={() => setActiveId(doc.id)} title={doc.path ?? '本地草稿'}><FileText size={16}/><span>{doc.title.replace(/\.md$/, '')}</span>{doc.content !== doc.savedContent && <i className="dirty-dot"/>}</button>)}</div>
-            {recentFiles.length > 0 && <>
-              <div className="section-label recent-label">最近打开</div>
-              {recentFiles.map(file => <button key={file} title={file} className="document-item recent-item" onClick={() => void openRecent(file)}><FileText size={14}/><span>{file.split(/[\\/]/).pop()}</span></button>)}
-            </>}
           </div>
           {sidebarTab === 'outline' && <>
             <div className="section-label">文档结构</div>
@@ -221,7 +221,8 @@ export default function App() {
       </main>
     </div>
     {toast && <div className="toast" role="status">{toast}<button aria-label="关闭提示" onClick={() => setToast('')}><X size={14}/></button></div>}
-    {showSettings && <Modal title="偏好设置" onClose={() => setShowSettings(false)}><div className="settings-tabs"><button className={settingsTab === 'editor' ? 'active' : ''} onClick={() => setSettingsTab('editor')}>编辑器</button><button className={settingsTab === 'ai' ? 'active' : ''} onClick={() => setSettingsTab('ai')}>AI 服务</button></div>{settingsTab === 'editor' ? <div className="settings-content"><label className="setting-row"><span><strong>外观</strong><small>选择适合你的写作氛围</small></span><select aria-label="外观" value={preferences.theme} onChange={event => changePreference('theme', event.target.value as Preferences['theme'])}><option value="light">浅色 · 云白</option><option value="dark">深色 · 午夜蓝</option><option value="system">跟随系统</option></select></label><label className="setting-row"><span><strong>正文字号</strong><small>编辑与阅读同步调整</small></span><select aria-label="正文字号" value={preferences.fontSize} onChange={event => changePreference('fontSize', Number(event.target.value))}>{[14, 15, 16, 17, 18, 20, 22].map(size => <option key={size} value={size}>{size} px</option>)}</select></label><label className="setting-row"><span><strong>自动保存</strong><small>停止输入后，将已命名文档写入磁盘</small></span><input aria-label="自动保存" type="checkbox" className="toggle" checked={preferences.autosave} onChange={event => changePreference('autosave', event.target.checked)}/></label><p className="settings-note">未命名文档始终保留为本机草稿。<br/>CoMD 0.3.0 · 独立开发 · 无需账号</p></div> : <form className="settings-content" onSubmit={event => { event.preventDefault(); setSettingsBusy(true); unwrap(window.comd.updateAI(aiConfig)).then(() => { notify('AI 设置已保存'); setShowSettings(false); }).catch(fail).finally(() => setSettingsBusy(false)); }}><p className="form-intro">连接你自己的模型服务。仅在手动发送时，上传选中文字和修改要求。支持兼容 Chat Completions 的接口。</p><label className="field">API 基础地址<input required type="url" value={aiConfig.endpoint} onChange={event => setAIConfig({ ...aiConfig, endpoint: event.target.value })} placeholder="https://api.example.com/v1"/></label><label className="field">模型名称<input required value={aiConfig.model} onChange={event => setAIConfig({ ...aiConfig, model: event.target.value })} placeholder="填写服务商提供的模型 ID"/></label><label className="field">API Key<input type="password" autoComplete="off" value={aiConfig.apiKey ?? ''} onChange={event => setAIConfig({ ...aiConfig, apiKey: event.target.value })} placeholder={aiConfig.hasKey ? '已加密保存；留空保持原密钥' : '本机无鉴权服务可留空'}/></label>{aiConfig.hasKey && <label className="check-row"><input type="checkbox" checked={aiConfig.clearKey ?? false} onChange={event => setAIConfig({ ...aiConfig, clearKey: event.target.checked })}/>删除已保存的密钥</label>}<p className="settings-note">密钥使用系统安全存储加密。模型服务费用由服务商收取，CoMD 不包含 API 额度。</p><button className="primary" type="submit" disabled={settingsBusy}>{settingsBusy ? <LoaderCircle size={15} className="spin"/> : <Check size={15}/>}保存设置</button></form>}</Modal>}
+    {showRecent && <Modal title="最近打开" onClose={() => setShowRecent(false)}><RecentPicker onOpen={openRecent}/></Modal>}
+    {showSettings && <Modal title="偏好设置" onClose={() => setShowSettings(false)}><div className="settings-tabs"><button className={settingsTab === 'editor' ? 'active' : ''} onClick={() => setSettingsTab('editor')}>编辑器</button><button className={settingsTab === 'ai' ? 'active' : ''} onClick={() => setSettingsTab('ai')}>AI 服务</button></div>{settingsTab === 'editor' ? <div className="settings-content"><label className="setting-row"><span><strong>外观</strong><small>选择适合你的写作氛围</small></span><select aria-label="外观" value={preferences.theme} onChange={event => changePreference('theme', event.target.value as Preferences['theme'])}><option value="light">浅色 · 云白</option><option value="dark">深色 · 午夜蓝</option><option value="system">跟随系统</option></select></label><label className="setting-row"><span><strong>正文字号</strong><small>编辑与阅读同步调整</small></span><select aria-label="正文字号" value={preferences.fontSize} onChange={event => changePreference('fontSize', Number(event.target.value))}>{[14, 15, 16, 17, 18, 20, 22].map(size => <option key={size} value={size}>{size} px</option>)}</select></label><label className="setting-row"><span><strong>自动保存</strong><small>停止输入后，将已命名文档写入磁盘</small></span><input aria-label="自动保存" type="checkbox" className="toggle" checked={preferences.autosave} onChange={event => changePreference('autosave', event.target.checked)}/></label><p className="settings-note">未命名文档始终保留为本机草稿。<br/>CoMD 0.3.1 · 独立开发 · 无需账号</p></div> : <form className="settings-content" onSubmit={event => { event.preventDefault(); setSettingsBusy(true); unwrap(window.comd.updateAI(aiConfig)).then(() => { notify('AI 设置已保存'); setShowSettings(false); }).catch(fail).finally(() => setSettingsBusy(false)); }}><p className="form-intro">连接你自己的模型服务。仅在手动发送时，上传选中文字和修改要求。支持兼容 Chat Completions 的接口。</p><label className="field">API 基础地址<input required type="url" value={aiConfig.endpoint} onChange={event => setAIConfig({ ...aiConfig, endpoint: event.target.value })} placeholder="https://api.example.com/v1"/></label><label className="field">模型名称<input required value={aiConfig.model} onChange={event => setAIConfig({ ...aiConfig, model: event.target.value })} placeholder="填写服务商提供的模型 ID"/></label><label className="field">API Key<input type="password" autoComplete="off" value={aiConfig.apiKey ?? ''} onChange={event => setAIConfig({ ...aiConfig, apiKey: event.target.value })} placeholder={aiConfig.hasKey ? '已加密保存；留空保持原密钥' : '本机无鉴权服务可留空'}/></label>{aiConfig.hasKey && <label className="check-row"><input type="checkbox" checked={aiConfig.clearKey ?? false} onChange={event => setAIConfig({ ...aiConfig, clearKey: event.target.checked })}/>删除已保存的密钥</label>}<p className="settings-note">密钥使用系统安全存储加密。模型服务费用由服务商收取，CoMD 不包含 API 额度。</p><button className="primary" type="submit" disabled={settingsBusy}>{settingsBusy ? <LoaderCircle size={15} className="spin"/> : <Check size={15}/>}保存设置</button></form>}</Modal>}
     {closeTarget && <Modal title="保存这份文档？" onClose={() => setCloseTarget(null)}><p className="form-intro">「{docs.find(doc => doc.id === closeTarget)?.title}」还有未保存的改动。关闭并丢弃后，将从工作区移除这份草稿。</p><div className="dialog-actions"><button className="secondary" onClick={() => void removeDoc(closeTarget)}>丢弃改动</button><button className="secondary" onClick={() => setCloseTarget(null)}>取消</button><button className="primary" onClick={() => { const id = closeTarget; void saveDoc(id).then(saved => { if (saved) void removeDoc(id); }); }}>保存并关闭</button></div></Modal>}
     {ai && <Modal title="让文字更进一步" onClose={() => { if (!ai.busy) setAI(null); }}><div className="ai-label"><Sparkles size={14}/>AI 编辑 <span>先审阅，再应用</span></div><div className="selected-preview">{ai.original}</div>{ai.result ? <><div className="result-label">建议修改</div><div className="ai-result">{ai.result}</div><div className="dialog-actions"><button className="secondary" onClick={() => setAI(null)}>放弃</button><button className="secondary" onClick={() => setAI({ ...ai, result: undefined })}>调整要求</button><button className="primary" onClick={acceptAI}><Check size={16}/>接受修改</button></div></> : <><label className="field">你希望如何修改？<textarea autoFocus rows={3} value={ai.instruction} onChange={event => setAI({ ...ai, instruction: event.target.value })} placeholder="例如：让表达更简洁，保留原意和 Markdown 格式。" disabled={ai.busy}/></label><div className="prompt-chips">{['润色文字，保持原意', '更简洁地表达', '翻译成英文'].map(prompt => <button key={prompt} disabled={ai.busy} onClick={() => setAI({ ...ai, instruction: prompt })}>{prompt}</button>)}</div>{ai.error && <p className="error-text">{ai.error}</p>}<p className="settings-note">将发送上述选中文字与要求至设置中的 API 服务。</p><div className="dialog-actions"><button className="secondary" disabled={ai.busy} onClick={() => { setAI(null); setSettingsTab('ai'); setShowSettings(true); }}>配置服务</button><button className="primary" disabled={ai.busy || !ai.instruction.trim()} onClick={() => void runAI()}>{ai.busy ? <LoaderCircle size={15} className="spin"/> : <ArrowRight size={15}/>} {ai.busy ? '正在生成…' : '发送修改要求'}</button></div></>}</Modal>}
   </div>;
