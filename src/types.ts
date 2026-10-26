@@ -2,7 +2,12 @@ export interface DocumentState {
   id: string; path: string | null; title: string; content: string; savedContent: string;
   baseHash?: string | null; existing?: boolean; conflict?: { disk: string | null }; error?: string;
 }
-export interface Preferences { theme: 'light' | 'dark' | 'system'; mode: 'live' | 'source' | 'split' | 'read'; fontSize: number; autosave: boolean; sidebar: boolean }
+export interface Preferences { theme: 'light' | 'dark' | 'system'; mode: 'live' | 'source' | 'split' | 'read'; fontSize: number; autosave: boolean; sidebar: boolean; autoCheckUpdates: boolean }
+export interface UpdateState {
+  status: 'idle' | 'checking' | 'available' | 'current' | 'unavailable' | 'error';
+  currentVersion: string; checkedAt: number | null; message: string;
+  release: { version: string; pageUrl: string; notes: string; downloadUrl: string | null; assetName: string | null } | null;
+}
 export interface AIConfig { endpoint: string; model: string; hasKey?: boolean; encryptionAvailable?: boolean; apiKey?: string; clearKey?: boolean }
 export interface Folder { path: string; name: string }
 export interface FolderEntry extends Folder { kind: 'folder' | 'file' }
@@ -28,6 +33,10 @@ export interface DesktopAPI {
   aiSettings(): Promise<Result<AIConfig>>;
   updateAI(config: AIConfig): Promise<Result<boolean>>;
   rewrite(text: string, instruction: string): Promise<Result<string>>;
+  updateStatus(): Promise<Result<UpdateState>>;
+  checkUpdates(): Promise<Result<UpdateState>>;
+  openUpdate(kind: 'release' | 'download'): Promise<Result<boolean>>;
+  onUpdate(callback: (update: UpdateState) => void): () => void;
   onAction(callback: (action: string) => void): () => void;
   onOpened(callback: (doc: DocumentState) => void): () => void;
   onDisk(callback: (event: { id: string; content: string | null }) => void): () => void;

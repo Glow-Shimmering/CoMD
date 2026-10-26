@@ -7,6 +7,7 @@ import http from 'node:http';
 import { checkOutline } from './outline.mjs';
 import { checkWorkspace } from './workspace.mjs';
 import { checkRecent } from './recent.mjs';
+import { checkUpdates } from './updates.mjs';
 
 const root = path.resolve('.'), output = path.join(root, 'test-results');
 await fs.mkdir(output, { recursive: true });
@@ -21,7 +22,7 @@ let application, page;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(fn, label, timeout = 12000) { const end = Date.now() + timeout; while (Date.now() < end) { if (await fn()) return; await delay(120); } throw new Error('Timed out: ' + label); }
 async function launch() {
-  application = await electron.launch({ ...(process.env.COMD_EXECUTABLE ? { executablePath: process.env.COMD_EXECUTABLE, args: [] } : { args: [root] }), env: { ...process.env, COMD_TEST_DIR: userData, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' } });
+  application = await electron.launch({ ...(process.env.COMD_EXECUTABLE ? { executablePath: process.env.COMD_EXECUTABLE, args: [] } : { args: [root] }), env: { ...process.env, COMD_TEST_DIR: userData, COMD_TEST_UPDATE_CHECK: '1', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' } });
   page = await application.firstWindow(); page.setDefaultTimeout(30000);
   page.on('pageerror', error => errors.push(error.message));
   await page.locator('.editor-host .cm-content').waitFor();
@@ -38,6 +39,7 @@ try {
   await page.screenshot({ path: path.join(output, 'CoMD-light-live.png') });
   checks.push('Desktop boot, sandboxed renderer, welcome live editor');
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
+  checks.push(...await checkUpdates(page, application, { until, output }));
   await page.getByRole('button', { name: '最近打开', exact: true }).click();
   await page.getByText('还没有最近打开的记录。打开文件或文件夹后，会出现在这里。').waitFor();
   await page.keyboard.press('Escape');
@@ -131,6 +133,9 @@ try {
   await page.keyboard.press('Escape');
   checks.push('Recent file and folder history survives quit/relaunch');
   checks.push('Quit/relaunch restores unsaved drafts and open documents');
+  assert.equal((await page.evaluate(() => window.comd.bootstrap())).value.preferences.autoCheckUpdates, false);
+  assert.equal((await page.evaluate(() => window.comd.updateStatus())).value.status, 'idle');
+  checks.push('Automatic update preference survives restart');
   assert.deepEqual(errors, []);
   await fs.writeFile(path.join(output, 'desktop-report.json'), JSON.stringify({ passed: checks, rendererErrors: errors, platform: process.platform, arch: process.arch, packagedMacApplicationTested: !!process.env.COMD_EXECUTABLE, realAIProviderTested: false }, null, 2));
   console.log(checks.map(check => 'PASS ' + check).join('\n'));

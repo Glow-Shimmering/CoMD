@@ -6,6 +6,7 @@ const { randomUUID } = require('node:crypto');
 const { readDocument, writeDocument, atomicWrite, within } = require('./files.cjs');
 const { folderInfo, listFolder, folderDocument } = require('./folders.cjs');
 const { normalizeRecent, rememberRecent } = require('./recent.cjs');
+const { createUpdateChecker } = require('./updates.cjs');
 
 app.setName('CoMD');
 if (process.env.COMD_TEST_DIR) app.setPath('userData', process.env.COMD_TEST_DIR);
@@ -19,6 +20,8 @@ const filters = [{ name: 'Markdown / 文本', extensions: ['md', 'markdown', 'md
 const allowedExtensions = /\.(md|markdown|mdown|txt)$/i;
 const pendingPaths = process.argv.slice(1).filter(p => path.isAbsolute(p) && allowedExtensions.test(p));
 const send = (name, value) => { if (win && !win.isDestroyed()) win.webContents.send(name, value); };
+const updates = createUpdateChecker({ currentVersion: app.getVersion(), platform: process.platform, arch: process.arch, fetch: (...args) => net.fetch(...args), onChange: value => send('update-status', value) });
+const configureUpdateChecks = () => updates.setAutomatic(state.preferences.autoCheckUpdates !== false && (!process.env.COMD_TEST_DIR || process.env.COMD_TEST_UPDATE_CHECK === '1'));
 async function checkpoint() {
   stateQueue = stateQueue.catch(() => {}).then(async () => {
     await fs.mkdir(app.getPath('userData'), { recursive: true });
@@ -67,6 +70,12 @@ function validateEndpoint(value) {
 }
 function installHandlers() {
   handle('bootstrap', async () => ({ ...state, version: app.getVersion() }));
+  handle('update-status', () => updates.getState());
+  handle('check-updates', () => updates.check());
+  handle('open-update', async kind => {
+    if (!['release', 'download'].includes(kind)) throw new Error('无效的更新操作。');
+    await shell.openExternal(updates.openTarget(kind)); return true;
+  });
   handle('open', async () => {
     const result = await dialog.showOpenDialog(win, { filters, properties: ['openFile', 'multiSelections'] });
     if (result.canceled) return [];
@@ -100,6 +109,7 @@ function installHandlers() {
         eol: record?.eol ?? '\n', bom: record?.bom ?? false };
     });
     state = { ...state, docs, activeId: next.activeId, preferences: next.preferences ?? state.preferences };
+    configureUpdateChecks();
     await checkpoint(); return true;
   });
   handle('save', (id, content, saveAs = false, force = false) => {
@@ -185,11 +195,11 @@ function installHandlers() {
 function menu() {
   const action = name => () => send('action', name);
   const template = [
-    ...(process.platform === 'darwin' ? [{ label: 'CoMD', submenu: [{ role: 'about' }, { type: 'separator' }, { label: '设置…', accelerator: 'CmdOrCtrl+,', click: action('settings') }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit' }] }] : []),
+    ...(process.platform === 'darwin' ? [{ label: 'CoMD', submenu: [{ role: 'about' }, { label: '检查更新…', click: action('updates') }, { type: 'separator' }, { label: '设置…', accelerator: 'CmdOrCtrl+,', click: action('settings') }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit' }] }] : []),
     { label: '文件', submenu: [{ label: '新建', accelerator: 'CmdOrCtrl+N', click: action('new') }, { label: '打开…', accelerator: 'CmdOrCtrl+O', click: action('open') }, { label: '打开文件夹…', accelerator: 'CmdOrCtrl+Shift+O', click: action('openFolder') }, { label: '保存', accelerator: 'CmdOrCtrl+S', click: action('save') }, { label: '另存为…', accelerator: 'CmdOrCtrl+Shift+S', click: action('saveAs') }, { type: 'separator' }, { label: '导出 PDF…', click: action('pdf') }, { label: '导出 HTML…', click: action('html') }, { type: 'separator' }, { label: '关闭文档', accelerator: 'CmdOrCtrl+W', click: action('close') }, ...(process.platform === 'darwin' ? [] : [{ role: 'quit' }])] },
     { label: '编辑', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }, { type: 'separator' }, { label: '查找与替换', accelerator: 'CmdOrCtrl+F', click: action('find') }] },
     { label: '视图', submenu: [{ label: '专注模式', accelerator: 'CmdOrCtrl+Shift+F', click: action('focus') }, { label: '切换主题', click: action('theme') }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] },
-    { label: '帮助', submenu: [{ label: '使用指南', click: action('guide') }, { label: '关于 CoMD', click: () => dialog.showMessageBox(win, { message: `CoMD ${app.getVersion()}`, detail: '专注文字，自在表达。\n基于开源组件独立开发的 Markdown 桌面编辑器。', buttons: ['好'] }) }] }
+    { label: '帮助', submenu: [{ label: '检查更新…', click: action('updates') }, { label: '使用指南', click: action('guide') }, { label: '关于 CoMD', click: () => dialog.showMessageBox(win, { message: `CoMD ${app.getVersion()}`, detail: '专注文字，自在表达。\n基于开源组件独立开发的 Markdown 桌面编辑器。', buttons: ['好'] }) }] }
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -248,7 +258,7 @@ else {
         return net.fetch(pathToFileURL(target).href);
       } catch { return new Response('', { status: 404 }); }
     });
-    installHandlers(); menu(); await restore(); await createWindow();
+    installHandlers(); menu(); await restore(); await createWindow(); configureUpdateChecks();
     ipcMain.on('ready-to-close', async event => { if (event.sender !== win?.webContents) return; await stateQueue; closing = true; if (quitting) app.quit(); else win?.close(); });
     setInterval(async () => {
       if (pollBusy) return; pollBusy = true;
@@ -265,6 +275,7 @@ else {
     }, 1800).unref();
   });
   app.on('before-quit', () => { quitting = true; });
+  app.on('will-quit', () => updates.dispose());
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   app.on('activate', async () => { if (!win) { closing = false; await createWindow(); } });
 }

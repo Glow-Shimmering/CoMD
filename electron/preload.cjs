@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('comd', {
   save: invoke('save'), reload: invoke('reload'), persist: invoke('persist'),
   closeDoc: invoke('close-doc'), exportFile: invoke('export'), external: invoke('external'),
   aiSettings: invoke('ai-settings'), updateAI: invoke('ai-update'), rewrite: invoke('ai-rewrite'),
+  updateStatus: invoke('update-status'), checkUpdates: invoke('check-updates'), openUpdate: invoke('open-update'), onUpdate: subscribe('update-status'),
   onAction: subscribe('action'), onOpened: subscribe('opened'), onDisk: subscribe('disk'),
   onClosing: subscribe('closing'), readyToClose: () => ipcRenderer.send('ready-to-close'),
 });

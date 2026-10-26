@@ -1,6 +1,9 @@
 {
   "passed": [
     "Desktop boot, sandboxed renderer, welcome live editor",
+    "Automatic update check after startup, quiet new-version indicator and safe release notes",
+    "Manual checks, native menu, automatic preference, matching download and official release links",
+    "Update offline/missing-release/current-version/missing-installer states and retry recovery",
     "Recent picker empty state and keyboard dismissal",
     "Live task checkbox edits Markdown; paragraph selector applies a heading at line start",
     "Separate document/outline views; nested folds, skipped levels, duplicate titles, navigation, keyboard and per-document state",
@@ -17,7 +20,8 @@
     "Undo history persists across tab switching",
     "Opened folder is restored after quit/relaunch",
     "Recent file and folder history survives quit/relaunch",
-    "Quit/relaunch restores unsaved drafts and open documents"
+    "Quit/relaunch restores unsaved drafts and open documents",
+    "Automatic update preference survives restart"
   ],
   "rendererErrors": [],
   "platform": "darwin",
@@ -25,20 +29,19 @@
   "packagedMacApplicationTested": true,
   "realAIProviderTested": false,
   "packagedMacSmokeTested": true,
-  "packagedVersion": "0.3.1",
-  "legacyHistoryMigrationTested": true,
+  "packagedVersion": "0.3.2",
+  "liveUpdateServiceState": "unavailable",
   "visualReview": {
-    "recentPicker": true,
-    "cleanSidebar": true,
-    "folderTree": true,
-    "htmlAndMath": true,
+    "updatePanel": true,
+    "updateDarkTheme": true,
     "compactWidth": 900,
     "horizontalOverflow": false
   },
+  "updateTestsUseMockRelease": true,
   "packageChecks": {
-    "sameApplicationFiles": 183,
+    "sameApplicationFiles": 184,
     "windowsX64Metadata": true,
-    "windowsVersion": "0.3.1.0",
+    "windowsVersion": "0.3.2.0",
     "macSignatureVerified": true,
     "windowsRuntimeTested": false
   }

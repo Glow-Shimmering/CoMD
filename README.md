@@ -2,6 +2,12 @@
 
 专注文字，自在表达。基于 Electron、React、TypeScript 和 CodeMirror 6 独立实现的本地 Markdown 桌面应用。
 
+## 0.3.2 自动检查更新
+
+默认在启动约 10 秒后检查 GitHub 最新正式 Release，运行期间每 6 小时复查。发现新版本时在标题栏显示入口，设置 → 更新可查看版本说明、下载安装包，或关闭自动检查；帮助菜单也提供手动检查。检查失败不会打断编辑，不会把断网或没有 Release 误报为已是最新版。
+
+更新只检查版本信息，不发送文档或 API Key。下载由浏览器完成，安装仍需手动确认。本次需要先手动安装 0.3.2；0.3.1 及更早版本没有更新检查功能。发布要求见 [发布指南](docs/RELEASING.md)。
+
 ## 0.3.1 最近打开更新
 
 侧栏移除“已打开”和最近文件列表，在“打开文件夹”下新增“最近打开”。弹窗统一展示最近使用的文件和文件夹，显示完整路径提示并支持搜索；选择文件打开标签，选择文件夹恢复目录树。历史记录在重启后保留，自动迁移旧版的最近文件与当前文件夹。
@@ -23,11 +29,11 @@
 
 ## 使用
 
-- **macOS Apple Silicon**：打开发布目录 `release/0.3.1/` 里的 DMG，把 CoMD 拖入 Applications；也可以解压 macOS ZIP 后打开 CoMD.app。适用于 M 系列芯片，macOS 13 或更新版本。
+- **macOS Apple Silicon**：打开发布目录 `release/0.3.2/` 里的 DMG，把 CoMD 拖入 Applications；也可以解压 macOS ZIP 后打开 CoMD.app。适用于 M 系列芯片，macOS 13 或更新版本。
 - **Windows x64**：解压 Windows ZIP 到一个固定目录，双击 CoMD.exe。请保留同目录的 DLL、resources 等配套文件。适用于 Windows 10/11 的 x64 设备。若提供 Setup.exe，也可用安装向导安装。
 - 本地编辑无需账号与网络。首次打开会显示可编辑的欢迎文档。按 Cmd/Ctrl+O 打开自己的文件，Cmd/Ctrl+S 保存。
 
-这是 0.3.1 最近打开更新版。macOS 使用本机 ad-hoc 签名，未进行 Apple Developer ID 签名/公证；Windows 未使用商业代码签名证书。系统可能显示未识别开发者的提示。确认文件来自本次构建后，按系统提供的“仍要打开/仍要运行”流程处理；不要关闭整个系统的安全保护。
+这是 0.3.2 自动检查更新版。macOS 使用本机 ad-hoc 签名，未进行 Apple Developer ID 签名/公证；Windows 未使用商业代码签名证书。系统可能显示未识别开发者的提示。确认文件来自本次构建后，按系统提供的“仍要打开/仍要运行”流程处理；不要关闭整个系统的安全保护。
 
 ## 功能
 
@@ -38,6 +44,7 @@
 | 文件夹树、本地多标签、最近文件/文件夹搜索、分层大纲折叠与跳转、查找替换 | 已实现 |
 | 双栏双向滚动、Markdown 内嵌 HTML 与行内样式 | 已实现 |
 | 深浅主题、跟随系统、字号、专注模式 | 已实现 |
+| 自动/手动检查 GitHub 正式版本、安装包下载入口 | 已实现；需手动安装 |
 | 自动保存、未命名草稿恢复 | 已实现 |
 | 外部修改检测、冲突暂停、另存副本、明确覆盖 | 已实现 |
 | UTF-8 BOM 与 CRLF 保留、上一版备份 | 已实现 |
@@ -52,7 +59,7 @@ AI 接口为兼容 `POST /chat/completions` 的服务。设置填写 API 基础�
 - 应用数据在 macOS 的 `~/Library/Application Support/CoMD`，Windows 的 `%APPDATA%/CoMD`。
 - `workspace.json` 包含当前文档草稿和偏好，`backups` 保存每个已写入文件的上一版，`ai.json` 保存 API 地址、模型和加密密钥。
 - 草稿和备份是本机明文文件，不属于端到端加密存储。
-- 无遥测、无自动上传。Markdown 中远程 HTTPS 图片在预览时会访问图片源；本地图片限文档目录及子目录。
+- 无遥测、无文档自动上传。默认自动检查会请求 GitHub Release 信息（包含常规网络信息及应用版本），可在设置中关闭。Markdown 中远程 HTTPS 图片在预览时会访问图片源；本地图片限文档目录及子目录。
 - 允许常见 HTML 排版标签与白名单内的行内样式；过滤脚本、事件处理器、iframe、页面样式表及可覆盖应用界面的定位样式。自定义 class 样式表和 JavaScript 不执行。只接受有效 UTF-8 文本，单文件限制 20 MB。
 
 ## 开发与构建
@@ -90,15 +97,17 @@ npm run dist:win:installer # Windows x64 NSIS 安装器，推荐 Windows runner
 
 ## 验证范围
 
-`tests/*.test.cjs` 验证 BOM/换行、备份、外部修改冲突、非 UTF-8 拒绝、目录边界和历史记录迁移。`tests/desktop.mjs` 使用真实 Electron 窗口和临时数据目录，验证最近文件/文件夹搜索与恢复、文件夹与路径边界、HTML 混排和过滤、双栏双向滚动、大纲分层折叠、文档间状态保持、输入、磁盘保存、冲突、图片/公式、HTML/PDF、标签页撤销、重启恢复，以及本机模拟 API 的 AI 修改流程。测试报告与截图位于 `test-results/`。
+`tests/*.test.cjs` 验证 BOM/换行、备份、外部修改冲突、非 UTF-8 拒绝、目录边界、历史记录迁移、更新版本比较/平台匹配/调度/超时。`tests/desktop.mjs` 使用真实 Electron 窗口和临时数据目录，验证启动自动检查、更新设置与失败恢复、最近文件/文件夹搜索与恢复、文件夹与路径边界、HTML 混排和过滤、双栏双向滚动、大纲分层折叠、文档间状态保持、输入、磁盘保存、冲突、图片/公式、HTML/PDF、标签页撤销、重启恢复，以及本机模拟 API 的 AI 修改流程。测试报告与截图位于 `test-results/`。
 
-真实 API 服务需要用户自行配置后测试；Windows 在本机只能完成构建和包结构验证，不能代替 Windows 真机验收。自动保存对外部写入有检查，但不提供跨进程文件锁，避免与另一个编辑器持续同时写同一文档。首版未提供 Mermaid 图渲染、云同步、协同编辑或自动更新。
+真实 API 服务需要用户自行配置后测试；Windows 在本机只能完成构建和包结构验证，不能代替 Windows 真机验收。自动保存对外部写入有检查，但不提供跨进程文件锁，避免与另一个编辑器持续同时写同一文档。首版未提供 Mermaid 图渲染、云同步、协同编辑或静默安装更新。
 
 ## 代码
 
 - `electron/main.cjs`：桌面窗口、菜单、隔离 IPC、文件授权、AI、导出。
 - `electron/files.cjs`：原子写入、编码、冲突、备份。
 - `src/Editor.tsx`：CodeMirror 与实时 Markdown 装饰。
+- `electron/updates.cjs`：GitHub 版本检查、定时调度与安装包匹配。
+- `src/UpdateSettings.tsx`：更新设置、状态、版本说明与下载入口。
 - `electron/recent.cjs`：最近文件/文件夹排序、去重与旧版迁移。
 - `src/RecentPicker.tsx`：最近打开弹窗与搜索。
 - `electron/folders.cjs`：文件夹授权边界与目录读取。

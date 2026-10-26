@@ -425,3 +425,20 @@ select.text-tool { width: 72px; color: var(--subtle); }
 .recent-kind { font-size: 10px; color: var(--muted); flex-shrink: 0; }
 .recent-empty { display: flex; gap: 8px; align-items: center; justify-content: center; min-height: 120px; color: var(--muted); font-size: 12px; line-height: 1.8; text-align: center; padding: 15px; }
 .recent-error { font-size: 12px; color: #b44c3e; background: var(--soft); border-radius: 6px; padding: 10px 12px; line-height: 1.7; }
+
+/* A quiet update indicator and a dedicated settings panel. */
+.update-indicator { display: flex; align-items: center; gap: 6px; padding: 6px 9px; margin-right: 8px; border-radius: 6px; color: var(--brand); background: var(--selected); font-size: 11px; }
+.update-summary { display: flex; align-items: center; gap: 14px; padding: 19px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); margin-bottom: 10px; }
+.update-summary.available { background: var(--selected); }
+.update-symbol { display: flex; color: var(--brand); }
+.update-summary h3 { font-size: 16px; margin: 0 0 7px; color: var(--heading); }
+.update-summary p { margin: 0; font-size: 12px; color: var(--subtle); }
+.update-message { font-size: 12px; color: var(--subtle); line-height: 1.7; }
+.update-settings .setting-row { gap: 18px; }
+.update-settings .setting-row small { line-height: 1.7; }
+.update-release { padding: 15px; margin: 12px 0 20px; border: 1px solid var(--line); border-radius: 8px; }
+.update-release-heading { display: flex; align-items: center; justify-content: space-between; font-size: 12px; margin-bottom: 12px; }
+.update-release-heading span { color: var(--brand); background: var(--selected); border-radius: 4px; padding: 3px 7px; font-size: 10px; }
+.update-notes { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; font-size: 12px; line-height: 1.8; color: var(--subtle); }
+.update-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
+.update-release-link { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--brand); }

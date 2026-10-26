@@ -4,13 +4,14 @@ import BrandMark from './BrandMark';
 import Outline from './Outline';
 import FileTree from './FileTree';
 import RecentPicker from './RecentPicker';
+import UpdateSettings from './UpdateSettings';
 import { Editor, forgetEditor, type EditorHandle } from './Editor';
 import { renderMarkdown, headings, exportHTML } from './markdown';
 import { welcome, guide } from './welcome';
-import { unwrap, type DocumentState, type Preferences, type AIConfig, type Folder, type RecentItem } from './types';
+import { unwrap, type DocumentState, type Preferences, type AIConfig, type Folder, type RecentItem, type UpdateState } from './types';
 
 const noCollapsedHeadings: ReadonlySet<string> = new Set();
-const initialPreferences: Preferences = { theme: 'light', mode: 'live', fontSize: 16, autosave: true, sidebar: true };
+const initialPreferences: Preferences = { theme: 'light', mode: 'live', fontSize: 16, autosave: true, sidebar: true, autoCheckUpdates: true };
 const createDoc = (content = '', title = '未命名.md'): DocumentState => ({ id: crypto.randomUUID(), path: null, title, content, savedContent: '' });
 const modes = [{ id: 'live', label: '实时', icon: PenLine }, { id: 'source', label: '源码', icon: Code2 }, { id: 'split', label: '双栏', icon: Columns2 }, { id: 'read', label: '阅读', icon: Eye }] as const;
 function IconButton({ title, children, onClick, className = '', disabled = false }: { title: string; children: ReactNode; onClick(): void; className?: string; disabled?: boolean }) { return <button type="button" title={title} aria-label={title} disabled={disabled} className={`icon-button ${className}`} onClick={onClick}>{children}</button>; }
@@ -28,7 +29,8 @@ export default function App() {
   const [toast, setToast] = useState(''), [saving, setSaving] = useState<string[]>([]), [menu, setMenu] = useState(false);
   const [cursor, setCursor] = useState({ line: 1, col: 1, selected: 0 }), [focus, setFocus] = useState(false);
   const [systemDark, setSystemDark] = useState(matchMedia('(prefers-color-scheme: dark)').matches);
-  const [showSettings, setShowSettings] = useState(false), [settingsTab, setSettingsTab] = useState<'editor' | 'ai'>('editor');
+  const [showSettings, setShowSettings] = useState(false), [settingsTab, setSettingsTab] = useState<'editor' | 'ai' | 'updates'>('editor');
+  const [update, setUpdate] = useState<UpdateState | null>(null), [version, setVersion] = useState('');
   const [aiConfig, setAIConfig] = useState<AIConfig>({ endpoint: 'https://api.openai.com/v1', model: '' });
   const [settingsBusy, setSettingsBusy] = useState(false), [closeTarget, setCloseTarget] = useState<string | null>(null);
   const [ai, setAI] = useState<{ id: string; from: number; to: number; original: string; instruction: string; result?: string; busy: boolean; error?: string } | null>(null);
@@ -50,6 +52,8 @@ export default function App() {
   const mac = window.comd?.platform === 'darwin', mod = mac ? '⌘' : 'Ctrl';
   const notify = (message: string) => setToast(message);
   const fail = (error: unknown) => notify(error instanceof Error ? error.message : String(error));
+  const checkUpdates = () => { void unwrap(window.comd.checkUpdates()).then(setUpdate).catch(fail); };
+  const openUpdates = () => { setSettingsTab('updates'); setShowSettings(true); };
   const changePreference = <K extends keyof Preferences>(key: K, value: Preferences[K]) => setPreferences(previous => ({ ...previous, [key]: value }));
   const updateDoc = (id: string, patch: Partial<DocumentState> | ((doc: DocumentState) => Partial<DocumentState>)) => setDocs(previous => previous.map(doc => doc.id === id ? { ...doc, ...(typeof patch === 'function' ? patch(doc) : patch) } : doc));
   const addDoc = (doc: DocumentState) => { setDocs(previous => previous.some(item => item.id === doc.id) ? previous : [...previous, doc]); setActiveId(doc.id); };
@@ -131,6 +135,7 @@ export default function App() {
       case 'focus': setFocus(value => !value); break;
       case 'theme': changePreference('theme', dark ? 'light' : 'dark'); break;
       case 'settings': setShowSettings(true); break;
+      case 'updates': openUpdates(); checkUpdates(); break;
       case 'pdf': case 'html': void exportDocument(action); break;
       case 'guide': addDoc(createDoc(guide, '使用指南.md')); break;
     }
@@ -139,9 +144,11 @@ export default function App() {
     if (!window.comd) { notify('请通过 CoMD 桌面应用打开此界面。'); return; }
     unwrap(window.comd.bootstrap()).then(data => {
       const initial = data.docs.length ? data.docs : [createDoc(welcome, '欢迎使用 CoMD.md')];
-      setDocs(initial); setActiveId(data.activeId || initial[0].id); setFolder(data.folder ?? null); setPreferences({ ...initialPreferences, ...data.preferences }); setReady(true);
+      setDocs(initial); setActiveId(data.activeId || initial[0].id); setFolder(data.folder ?? null); setPreferences({ ...initialPreferences, ...data.preferences }); setVersion(data.version); setReady(true);
     }).catch(fail);
     const offAction = window.comd.onAction(action => actions.current(action));
+    const offUpdate = window.comd.onUpdate(setUpdate);
+    unwrap(window.comd.updateStatus()).then(setUpdate).catch(fail);
     const offOpened = window.comd.onOpened(addDoc);
     const offDisk = window.comd.onDisk(event => {
       const doc = state.current.docs.find(item => item.id === event.id); if (!doc || event.content === doc.savedContent) return;
@@ -152,7 +159,7 @@ export default function App() {
       // A durable workspace snapshot preserves even unsaved/conflicted documents on next launch.
       Promise.allSettled([...inFlight.current.values()]).then(persist).then(() => window.comd.readyToClose()).catch(error => { fail(error); notify('草稿保存失败，暂未关闭窗口。请将文档另存为后重试。'); });
     });
-    return () => { offAction(); offOpened(); offDisk(); offClose(); };
+    return () => { offAction(); offUpdate(); offOpened(); offDisk(); offClose(); };
   }, []);
   useEffect(() => { const query = matchMedia('(prefers-color-scheme: dark)'); const listener = (event: MediaQueryListEvent) => setSystemDark(event.matches); query.addEventListener('change', listener); return () => query.removeEventListener('change', listener); }, []);
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; }, [dark]);
@@ -186,7 +193,7 @@ export default function App() {
   const dirty = active && active.content !== active.savedContent;
 
   return <div className={`app ${mac ? 'mac' : 'windows'} ${focus ? 'is-focus' : ''}`}>
-    <header className="titlebar"><div className="window-space"/><div className="titlebar-brand"><BrandMark className="tiny-logo"/> CoMD <span className="version">/</span><span className="titlebar-caption">Markdown 编辑器</span></div><div className="titlebar-right"><span className="local-dot"/> 本地工作区<IconButton title="设置" onClick={() => setShowSettings(true)}><Settings size={15}/></IconButton></div></header>
+    <header className="titlebar"><div className="window-space"/><div className="titlebar-brand"><BrandMark className="tiny-logo"/> CoMD <span className="version">/</span><span className="titlebar-caption">Markdown 编辑器</span></div><div className="titlebar-right">{update?.status === 'available' && <button className="update-indicator" onClick={openUpdates}><Download size={13}/>发现新版本</button>}<span className="local-dot"/> 本地工作区<IconButton title="设置" onClick={() => setShowSettings(true)}><Settings size={15}/></IconButton></div></header>
     <div className="workspace">
       {preferences.sidebar && !focus && <aside className="sidebar">
         <div className="sidebar-brand"><BrandMark className="brand-symbol"/><div><strong>CoMD</strong><span>专注文字，自在表达。</span></div></div>
@@ -222,7 +229,7 @@ export default function App() {
     </div>
     {toast && <div className="toast" role="status">{toast}<button aria-label="关闭提示" onClick={() => setToast('')}><X size={14}/></button></div>}
     {showRecent && <Modal title="最近打开" onClose={() => setShowRecent(false)}><RecentPicker onOpen={openRecent}/></Modal>}
-    {showSettings && <Modal title="偏好设置" onClose={() => setShowSettings(false)}><div className="settings-tabs"><button className={settingsTab === 'editor' ? 'active' : ''} onClick={() => setSettingsTab('editor')}>编辑器</button><button className={settingsTab === 'ai' ? 'active' : ''} onClick={() => setSettingsTab('ai')}>AI 服务</button></div>{settingsTab === 'editor' ? <div className="settings-content"><label className="setting-row"><span><strong>外观</strong><small>选择适合你的写作氛围</small></span><select aria-label="外观" value={preferences.theme} onChange={event => changePreference('theme', event.target.value as Preferences['theme'])}><option value="light">浅色 · 云白</option><option value="dark">深色 · 午夜蓝</option><option value="system">跟随系统</option></select></label><label className="setting-row"><span><strong>正文字号</strong><small>编辑与阅读同步调整</small></span><select aria-label="正文字号" value={preferences.fontSize} onChange={event => changePreference('fontSize', Number(event.target.value))}>{[14, 15, 16, 17, 18, 20, 22].map(size => <option key={size} value={size}>{size} px</option>)}</select></label><label className="setting-row"><span><strong>自动保存</strong><small>停止输入后，将已命名文档写入磁盘</small></span><input aria-label="自动保存" type="checkbox" className="toggle" checked={preferences.autosave} onChange={event => changePreference('autosave', event.target.checked)}/></label><p className="settings-note">未命名文档始终保留为本机草稿。<br/>CoMD 0.3.1 · 独立开发 · 无需账号</p></div> : <form className="settings-content" onSubmit={event => { event.preventDefault(); setSettingsBusy(true); unwrap(window.comd.updateAI(aiConfig)).then(() => { notify('AI 设置已保存'); setShowSettings(false); }).catch(fail).finally(() => setSettingsBusy(false)); }}><p className="form-intro">连接你自己的模型服务。仅在手动发送时，上传选中文字和修改要求。支持兼容 Chat Completions 的接口。</p><label className="field">API 基础地址<input required type="url" value={aiConfig.endpoint} onChange={event => setAIConfig({ ...aiConfig, endpoint: event.target.value })} placeholder="https://api.example.com/v1"/></label><label className="field">模型名称<input required value={aiConfig.model} onChange={event => setAIConfig({ ...aiConfig, model: event.target.value })} placeholder="填写服务商提供的模型 ID"/></label><label className="field">API Key<input type="password" autoComplete="off" value={aiConfig.apiKey ?? ''} onChange={event => setAIConfig({ ...aiConfig, apiKey: event.target.value })} placeholder={aiConfig.hasKey ? '已加密保存；留空保持原密钥' : '本机无鉴权服务可留空'}/></label>{aiConfig.hasKey && <label className="check-row"><input type="checkbox" checked={aiConfig.clearKey ?? false} onChange={event => setAIConfig({ ...aiConfig, clearKey: event.target.checked })}/>删除已保存的密钥</label>}<p className="settings-note">密钥使用系统安全存储加密。模型服务费用由服务商收取，CoMD 不包含 API 额度。</p><button className="primary" type="submit" disabled={settingsBusy}>{settingsBusy ? <LoaderCircle size={15} className="spin"/> : <Check size={15}/>}保存设置</button></form>}</Modal>}
+    {showSettings && <Modal title="偏好设置" onClose={() => setShowSettings(false)}><div className="settings-tabs"><button className={settingsTab === 'editor' ? 'active' : ''} onClick={() => setSettingsTab('editor')}>编辑器</button><button className={settingsTab === 'ai' ? 'active' : ''} onClick={() => setSettingsTab('ai')}>AI 服务</button><button className={settingsTab === 'updates' ? 'active' : ''} onClick={() => setSettingsTab('updates')}>更新</button></div>{settingsTab === 'editor' ? <div className="settings-content"><label className="setting-row"><span><strong>外观</strong><small>选择适合你的写作氛围</small></span><select aria-label="外观" value={preferences.theme} onChange={event => changePreference('theme', event.target.value as Preferences['theme'])}><option value="light">浅色 · 云白</option><option value="dark">深色 · 午夜蓝</option><option value="system">跟随系统</option></select></label><label className="setting-row"><span><strong>正文字号</strong><small>编辑与阅读同步调整</small></span><select aria-label="正文字号" value={preferences.fontSize} onChange={event => changePreference('fontSize', Number(event.target.value))}>{[14, 15, 16, 17, 18, 20, 22].map(size => <option key={size} value={size}>{size} px</option>)}</select></label><label className="setting-row"><span><strong>自动保存</strong><small>停止输入后，将已命名文档写入磁盘</small></span><input aria-label="自动保存" type="checkbox" className="toggle" checked={preferences.autosave} onChange={event => changePreference('autosave', event.target.checked)}/></label><p className="settings-note">未命名文档始终保留为本机草稿。<br/>CoMD {version} · 独立开发 · 无需账号</p></div> : settingsTab === 'updates' ? <UpdateSettings update={update} automatic={preferences.autoCheckUpdates} onAutomatic={enabled => changePreference('autoCheckUpdates', enabled)} onCheck={checkUpdates} onOpen={kind => void unwrap(window.comd.openUpdate(kind)).catch(fail)}/> : <form className="settings-content" onSubmit={event => { event.preventDefault(); setSettingsBusy(true); unwrap(window.comd.updateAI(aiConfig)).then(() => { notify('AI 设置已保存'); setShowSettings(false); }).catch(fail).finally(() => setSettingsBusy(false)); }}><p className="form-intro">连接你自己的模型服务。仅在手动发送时，上传选中文字和修改要求。支持兼容 Chat Completions 的接口。</p><label className="field">API 基础地址<input required type="url" value={aiConfig.endpoint} onChange={event => setAIConfig({ ...aiConfig, endpoint: event.target.value })} placeholder="https://api.example.com/v1"/></label><label className="field">模型名称<input required value={aiConfig.model} onChange={event => setAIConfig({ ...aiConfig, model: event.target.value })} placeholder="填写服务商提供的模型 ID"/></label><label className="field">API Key<input type="password" autoComplete="off" value={aiConfig.apiKey ?? ''} onChange={event => setAIConfig({ ...aiConfig, apiKey: event.target.value })} placeholder={aiConfig.hasKey ? '已加密保存；留空保持原密钥' : '本机无鉴权服务可留空'}/></label>{aiConfig.hasKey && <label className="check-row"><input type="checkbox" checked={aiConfig.clearKey ?? false} onChange={event => setAIConfig({ ...aiConfig, clearKey: event.target.checked })}/>删除已保存的密钥</label>}<p className="settings-note">密钥使用系统安全存储加密。模型服务费用由服务商收取，CoMD 不包含 API 额度。</p><button className="primary" type="submit" disabled={settingsBusy}>{settingsBusy ? <LoaderCircle size={15} className="spin"/> : <Check size={15}/>}保存设置</button></form>}</Modal>}
     {closeTarget && <Modal title="保存这份文档？" onClose={() => setCloseTarget(null)}><p className="form-intro">「{docs.find(doc => doc.id === closeTarget)?.title}」还有未保存的改动。关闭并丢弃后，将从工作区移除这份草稿。</p><div className="dialog-actions"><button className="secondary" onClick={() => void removeDoc(closeTarget)}>丢弃改动</button><button className="secondary" onClick={() => setCloseTarget(null)}>取消</button><button className="primary" onClick={() => { const id = closeTarget; void saveDoc(id).then(saved => { if (saved) void removeDoc(id); }); }}>保存并关闭</button></div></Modal>}
     {ai && <Modal title="让文字更进一步" onClose={() => { if (!ai.busy) setAI(null); }}><div className="ai-label"><Sparkles size={14}/>AI 编辑 <span>先审阅，再应用</span></div><div className="selected-preview">{ai.original}</div>{ai.result ? <><div className="result-label">建议修改</div><div className="ai-result">{ai.result}</div><div className="dialog-actions"><button className="secondary" onClick={() => setAI(null)}>放弃</button><button className="secondary" onClick={() => setAI({ ...ai, result: undefined })}>调整要求</button><button className="primary" onClick={acceptAI}><Check size={16}/>接受修改</button></div></> : <><label className="field">你希望如何修改？<textarea autoFocus rows={3} value={ai.instruction} onChange={event => setAI({ ...ai, instruction: event.target.value })} placeholder="例如：让表达更简洁，保留原意和 Markdown 格式。" disabled={ai.busy}/></label><div className="prompt-chips">{['润色文字，保持原意', '更简洁地表达', '翻译成英文'].map(prompt => <button key={prompt} disabled={ai.busy} onClick={() => setAI({ ...ai, instruction: prompt })}>{prompt}</button>)}</div>{ai.error && <p className="error-text">{ai.error}</p>}<p className="settings-note">将发送上述选中文字与要求至设置中的 API 服务。</p><div className="dialog-actions"><button className="secondary" disabled={ai.busy} onClick={() => { setAI(null); setSettingsTab('ai'); setShowSettings(true); }}>配置服务</button><button className="primary" disabled={ai.busy || !ai.instruction.trim()} onClick={() => void runAI()}>{ai.busy ? <LoaderCircle size={15} className="spin"/> : <ArrowRight size={15}/>} {ai.busy ? '正在生成…' : '发送修改要求'}</button></div></>}</Modal>}
   </div>;
