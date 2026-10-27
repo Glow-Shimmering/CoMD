@@ -30,6 +30,7 @@ export interface DesktopAPI {
   closeDoc(id: string): Promise<Result<boolean>>;
   exportFile(kind: string, html: string, title: string): Promise<Result<boolean>>;
   external(url: string): Promise<Result<boolean>>;
+  openLink(id: string, href: string): Promise<Result<{ kind: 'external' } | { kind: 'anchor'; fragment: string } | { kind: 'document'; document: DocumentState; fragment: string }>>;
   aiSettings(): Promise<Result<AIConfig>>;
   updateAI(config: AIConfig): Promise<Result<boolean>>;
   rewrite(text: string, instruction: string): Promise<Result<string>>;

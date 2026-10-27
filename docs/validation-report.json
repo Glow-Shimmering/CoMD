@@ -12,6 +12,9 @@
     "Folder tree: nested/empty folders, multiple files, refresh, duplicate-open protection and authorized paths",
     "Bidirectional split scrolling with wheel input, top/bottom alignment and stable feedback suppression",
     "Recent files/folders: search, reopening, duplicate protection, missing paths and clean sidebar",
+    "Local links: relative/parent/Chinese/space paths, HTML/reference links, cross-file anchors and missing files",
+    "Link navigation in live/read/split/source modes; existing dirty tabs retain content without duplicate tabs",
+    "Blue task check marks verified in rendered pixels in live/split/read modes and both themes; toggling and export preserved",
     "Native file open, typing, autosave, UTF-8 BOM / CRLF preservation",
     "Clean document reloads external edits",
     "Dirty conflict detected without overwriting; explicit reload resolves it",
@@ -27,23 +30,6 @@
   "rendererErrors": [],
   "platform": "darwin",
   "arch": "arm64",
-  "packagedMacApplicationTested": true,
-  "realAIProviderTested": false,
-  "packagedMacSmokeTested": true,
-  "packagedVersion": "0.3.3",
-  "selectionPixelRegressionTested": true,
-  "originalSelectionBugReproduced": true,
-  "visualReview": {
-    "sameLineSelection": true,
-    "crossLineSelection": true,
-    "lightAndDarkThemes": true,
-    "quoteAndCodeSelection": true
-  },
-  "packageChecks": {
-    "sameApplicationFiles": 184,
-    "windowsX64Metadata": true,
-    "windowsVersion": "0.3.3.0",
-    "macSignatureVerified": true,
-    "windowsRuntimeTested": false
-  }
+  "packagedMacApplicationTested": false,
+  "realAIProviderTested": false
 }

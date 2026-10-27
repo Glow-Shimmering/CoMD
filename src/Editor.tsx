@@ -7,6 +7,7 @@ import { languages } from '@codemirror/language-data';
 import { syntaxTree, syntaxHighlighting, HighlightStyle, bracketMatching, indentOnInput } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import { searchKeymap, highlightSelectionMatches, search, openSearchPanel } from '@codemirror/search';
+import { markdownLink } from './markdown';
 const states = new Map<string, EditorState>();
 export const forgetEditor = (id: string) => states.delete(id);
 class Bullet extends WidgetType {
@@ -72,7 +73,7 @@ export interface EditorHandle {
   replace(from: number, to: number, text: string): void; goTo(line: number): void;
   scrollToRatio(ratio: number): void;
 }
-interface Props { id: string; content: string; mode: string; dark: boolean; fontSize: number; onChange(text: string): void; onCursor(line: number, col: number, selected: number): void; onScroll?(ratio: number): void }
+interface Props { id: string; content: string; mode: string; dark: boolean; fontSize: number; onChange(text: string): void; onCursor(line: number, col: number, selected: number): void; onScroll?(ratio: number): void; onLink(href: string): void }
 export const Editor = forwardRef<EditorHandle, Props>((props, ref) => {
   const host = useRef<HTMLDivElement>(null), view = useRef<EditorView | null>(null), latest = useRef(props);
   const synchronizedTop = useRef<number | null>(null);
@@ -109,10 +110,19 @@ export const Editor = forwardRef<EditorHandle, Props>((props, ref) => {
   useEffect(() => {
     if (!host.current) return;
     const wrap = (delimiter: string) => (v: EditorView) => { const s = v.state.selection.main; v.dispatch({ changes: { from: s.from, to: s.to, insert: delimiter + v.state.sliceDoc(s.from, s.to) + delimiter }, selection: { anchor: s.from + delimiter.length, head: s.to + delimiter.length } }); return true; };
+    const followLink = (v: EditorView, position: number) => {
+      let node = syntaxTree(v.state).resolveInner(position, 1);
+      while (!['Link', 'Autolink'].includes(node.name) && node.parent) node = node.parent;
+      if (!['Link', 'Autolink'].includes(node.name)) return false;
+      const href = markdownLink(v.state.doc.toString(), node.from, node.to);
+      if (href === null) return false;
+      latest.current.onLink(href); return true;
+    };
+    let pointerLink: { position: number; x: number; y: number; modified: boolean } | null = null;
     const extensions = [
       history(), drawSelection(), bracketMatching(), indentOnInput(), highlightSelectionMatches(),
       search({ top: true }), markdown({ base: markdownLanguage, codeLanguages: languages }),
-      keymap.of([{ key: 'Mod-b', run: wrap('**') }, { key: 'Mod-i', run: wrap('*') }, ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
+      keymap.of([{ key: 'Mod-Enter', run: v => followLink(v, v.state.selection.main.head) }, { key: 'Mod-b', run: wrap('**') }, { key: 'Mod-i', run: wrap('*') }, ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
       EditorView.lineWrapping, placeholder('从一个想法开始…'),
       EditorView.contentAttributes.of({ 'aria-label': 'Markdown 编辑器', spellcheck: 'false' }),
       mode.current.of(props.mode === 'live' ? [livePreview] : [lineNumbers(), highlightActiveLine()]),
@@ -121,7 +131,23 @@ export const Editor = forwardRef<EditorHandle, Props>((props, ref) => {
         if (update.docChanged) latest.current.onChange(update.state.doc.toString());
         if (update.selectionSet || update.docChanged) { const s = update.state.selection.main, line = update.state.doc.lineAt(s.head); latest.current.onCursor(line.number, s.head - line.from + 1, s.to - s.from); }
       }),
-      EditorView.domEventHandlers({ scroll: (_event, v) => {
+      EditorView.domEventHandlers({ mousedown: (event, v) => {
+        pointerLink = null;
+        if (event.button !== 0 || event.shiftKey || event.altKey) return false;
+        const modified = event.metaKey || event.ctrlKey;
+        if (!modified && latest.current.mode !== 'live') return false;
+        const position = v.posAtCoords({ x: event.clientX, y: event.clientY });
+        if (position !== null) pointerLink = { position, x: event.clientX, y: event.clientY, modified };
+        return false;
+      }, mouseup: (event, v) => {
+        // Live decorations can replace the clicked DOM node on focus. Remember
+        // the source position on press, and follow only a click, never a drag.
+        const candidate = pointerLink; pointerLink = null;
+        if (!candidate || Math.hypot(event.clientX - candidate.x, event.clientY - candidate.y) > 4) return false;
+        if (!candidate.modified && !v.state.selection.main.empty) return false;
+        if (!followLink(v, candidate.position)) return false;
+        event.preventDefault(); return true;
+      }, scroll: (_event, v) => {
         const el = v.scrollDOM, expected = synchronizedTop.current; synchronizedTop.current = null;
         // Ignore the scroll event generated by the other pane; user scrolls still flow back.
         if (expected !== null && Math.abs(el.scrollTop - expected) < 1) return;

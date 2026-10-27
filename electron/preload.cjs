@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld('comd', {
   listRecent: invoke('list-recent'), openRecentFolder: invoke('open-recent-folder'),
   openFolder: invoke('open-folder'), listFolder: invoke('list-folder'), openFolderFile: invoke('open-folder-file'), closeFolder: invoke('close-folder'),
   save: invoke('save'), reload: invoke('reload'), persist: invoke('persist'),
-  closeDoc: invoke('close-doc'), exportFile: invoke('export'), external: invoke('external'),
+  closeDoc: invoke('close-doc'), exportFile: invoke('export'), external: invoke('external'), openLink: invoke('open-link'),
   aiSettings: invoke('ai-settings'), updateAI: invoke('ai-update'), rewrite: invoke('ai-rewrite'),
   updateStatus: invoke('update-status'), checkUpdates: invoke('check-updates'), openUpdate: invoke('open-update'), onUpdate: subscribe('update-status'),
   onAction: subscribe('action'), onOpened: subscribe('opened'), onDisk: subscribe('disk'),

@@ -6,7 +6,7 @@ import FileTree from './FileTree';
 import RecentPicker from './RecentPicker';
 import UpdateSettings from './UpdateSettings';
 import { Editor, forgetEditor, type EditorHandle } from './Editor';
-import { renderMarkdown, headings, exportHTML } from './markdown';
+import { renderMarkdown, headings, exportHTML, findAnchor } from './markdown';
 import { welcome, guide } from './welcome';
 import { unwrap, type DocumentState, type Preferences, type AIConfig, type Folder, type RecentItem, type UpdateState } from './types';
 
@@ -25,6 +25,7 @@ export default function App() {
   const [sidebarTab, setSidebarTab] = useState<'files' | 'outline'>('files');
   const [folder, setFolder] = useState<Folder | null>(null), [folderRevision, setFolderRevision] = useState(0);
   const synchronizedPreviewTop = useRef<number | null>(null);
+  const [navigation, setNavigation] = useState<{ id: string; fragment: string } | null>(null);
   const [collapsedOutlines, setCollapsedOutlines] = useState<Record<string, ReadonlySet<string>>>({});
   const [toast, setToast] = useState(''), [saving, setSaving] = useState<string[]>([]), [menu, setMenu] = useState(false);
   const [cursor, setCursor] = useState({ line: 1, col: 1, selected: 0 }), [focus, setFocus] = useState(false);
@@ -76,6 +77,17 @@ export default function App() {
     inFlight.current.set(id, operation); return operation;
   }
   async function open() { try { (await unwrap(window.comd.open())).forEach(addDoc); } catch (error) { fail(error); } }
+  async function openLink(href: string) {
+    if (!active) return;
+    const id = active.id;
+    try {
+      const result = await unwrap(window.comd.openLink(id, href));
+      if (result.kind === 'document') {
+        addDoc(result.document);
+        setNavigation({ id: result.document.id, fragment: result.fragment });
+      } else if (result.kind === 'anchor') setNavigation({ id, fragment: result.fragment });
+    } catch (error) { fail(error); }
+  }
   function activateFolder(next: Folder) { setFolder(next); setFolderRevision(value => value + 1); setSidebarTab('files'); changePreference('sidebar', true); setFocus(false); }
   async function openFolder() {
     try { const next = await unwrap(window.comd.openFolder()); if (next) activateFolder(next); } catch (error) { fail(error); }
@@ -177,6 +189,25 @@ export default function App() {
     window.addEventListener('keydown', listener); return () => window.removeEventListener('keydown', listener);
   }, [ai?.busy]);
   useEffect(() => { synchronizedPreviewTop.current = null; }, [activeId, preferences.mode]);
+  useEffect(() => {
+    if (!navigation || active?.id !== navigation.id) return;
+    const frame = requestAnimationFrame(() => {
+      const template = document.createElement('template'); template.innerHTML = rendered;
+      const target = findAnchor(preview.current ?? template.content, navigation.fragment);
+      if (!target && navigation.fragment && navigation.fragment !== 'top') notify('未找到链接中的位置：' + navigation.fragment);
+      const line = Number(target?.getAttribute('data-comd-line')) || 1;
+      if (preview.current) {
+        for (let details = target?.closest('details'); details; details = details.parentElement?.closest('details')) details.open = true;
+        const container = preview.current;
+        const top = target && target.getAttribute('data-comd-line') !== '1' ? target.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop : 0;
+        synchronizedPreviewTop.current = Math.max(0, Math.min(top, container.scrollHeight - container.clientHeight));
+        if (preferences.mode === 'split') editor.current?.scrollToRatio(synchronizedPreviewTop.current / Math.max(1, container.scrollHeight - container.clientHeight));
+        container.scrollTop = top;
+      } else editor.current?.goTo(line);
+      setNavigation(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [navigation, active?.id, rendered, preferences.mode]);
   const scrollFromEditor = (ratio: number) => {
     if (preferences.mode !== 'split' || !preview.current) return;
     const element = preview.current, top = ratio * Math.max(0, element.scrollHeight - element.clientHeight);
@@ -220,8 +251,8 @@ export default function App() {
           {active.conflict && <div className="conflict-banner"><AlertTriangle size={17}/><span>{active.conflict.disk === null ? '原文件被移除或无法读取。草稿已保留。' : '文件在外部发生修改。自动保存已暂停。'}</span><button disabled={active.conflict.disk === null} onClick={() => void reloadDoc(active.id)}>载入磁盘版本</button><button onClick={() => void saveDoc(active.id, true)}>另存副本</button><button onClick={() => { if (confirm('确定用当前编辑器内容覆盖磁盘文件？磁盘上一版会保留在本地备份中。')) void saveDoc(active.id, false, true); }}>覆盖磁盘</button></div>}
           {active.error && <div className="conflict-banner"><AlertTriangle size={16}/><span>保存失败：{active.error}</span><button onClick={() => void saveDoc(active.id)}>重试</button><button onClick={() => void saveDoc(active.id, true)}>另存为</button></div>}
           <div className={`document-body mode-${preferences.mode}`} style={{ '--font-size': `${preferences.fontSize}px` } as React.CSSProperties}>
-            {preferences.mode !== 'read' && <div className="editor-pane"><Editor ref={editor} id={active.id} content={active.content} mode={preferences.mode} dark={dark} fontSize={preferences.fontSize} onChange={content => updateDoc(active.id, { content, error: undefined })} onCursor={(line, col, selected) => setCursor({ line, col, selected })} onScroll={scrollFromEditor}/></div>}
-            {(preferences.mode === 'split' || preferences.mode === 'read') && <div className="preview-pane" ref={preview} onScroll={scrollFromPreview} onClick={event => { const a = (event.target as HTMLElement).closest('a'); if (a) { event.preventDefault(); const href = a.getAttribute('href') ?? ''; if (href.startsWith('#')) { try { preview.current?.querySelector(href)?.scrollIntoView(); } catch {} } else void unwrap(window.comd.external(href)).catch(fail); } }}><article className="prose" dangerouslySetInnerHTML={{ __html: rendered }}/><div className="end-mark"><span/></div></div>}
+            {preferences.mode !== 'read' && <div className="editor-pane"><Editor ref={editor} id={active.id} content={active.content} mode={preferences.mode} dark={dark} fontSize={preferences.fontSize} onChange={content => updateDoc(active.id, { content, error: undefined })} onCursor={(line, col, selected) => setCursor({ line, col, selected })} onScroll={scrollFromEditor} onLink={href => void openLink(href)}/></div>}
+            {(preferences.mode === 'split' || preferences.mode === 'read') && <div className="preview-pane" ref={preview} onScroll={scrollFromPreview} onClick={event => { const a = (event.target as HTMLElement).closest('a[href]'); if (a) { event.preventDefault(); void openLink(a.getAttribute('href') ?? ''); } }}><article className="prose" dangerouslySetInnerHTML={{ __html: rendered }}/><div className="end-mark"><span/></div></div>}
           </div>
           <footer className="statusbar"><div>{saving.includes(active.id) ? <><LoaderCircle size={12} className="spin"/>正在保存</> : active.conflict || active.error ? <><AlertTriangle size={12}/>需要处理</> : !active.path ? <><Circle size={9}/>本地草稿</> : dirty ? <><Circle size={9}/>尚未保存</> : <><Check size={13}/>已保存</>}<span className="status-separator"/><span>{preferences.autosave ? '自动保存开启' : '手动保存'}</span></div><div><span>{wordCount.toLocaleString()} 字</span><span className="status-separator"/>{cursor.selected > 0 ? <span>已选 {cursor.selected} 字符</span> : <span>行 {cursor.line}，列 {cursor.col}</span>}<span className="status-separator"/><span>Markdown</span><span className="status-separator"/><span>UTF-8</span></div></footer>
         </> : <div className="empty-state"><BrandMark className="brand-symbol large"/><h1>下一段文字，从这里开始。</h1><p>你的文档，你的节奏。</p><div><button className="primary" onClick={() => addDoc(createDoc())}><Plus size={16}/>新建文档</button><button className="secondary" onClick={() => void open()}><FolderOpen size={16}/>打开文件</button></div></div>}

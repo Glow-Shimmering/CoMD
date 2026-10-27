@@ -9,6 +9,7 @@ import { checkWorkspace } from './workspace.mjs';
 import { checkRecent } from './recent.mjs';
 import { checkUpdates } from './updates.mjs';
 import { checkSelection } from './selection.mjs';
+import { checkLinks } from './links.mjs';
 
 const root = path.resolve('.'), output = path.join(root, 'test-results');
 await fs.mkdir(output, { recursive: true });
@@ -70,6 +71,7 @@ try {
   checks.push(...await checkWorkspace(page, application, { temp, output, setText, until, exportViaUI }));
   await checkRecent(page, application, { temp, until, output });
   checks.push('Recent files/folders: search, reopening, duplicate protection, missing paths and clean sidebar');
+  checks.push(...await checkLinks(page, application, { temp, output, until, setText, exportViaUI }));
   await application.evaluate(({ dialog }, target) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [target] }); }, file);
   await page.getByRole('button', { name: /打开文件/ }).first().click();
   await until(async () => (await page.locator('.cm-content').innerText()).includes('原始内容'), 'open native file');

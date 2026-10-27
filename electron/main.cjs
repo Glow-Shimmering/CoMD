@@ -7,12 +7,14 @@ const { readDocument, writeDocument, atomicWrite, within } = require('./files.cj
 const { folderInfo, listFolder, folderDocument } = require('./folders.cjs');
 const { normalizeRecent, rememberRecent } = require('./recent.cjs');
 const { createUpdateChecker } = require('./updates.cjs');
+const { resolveDocumentLink } = require('./links.cjs');
 
 app.setName('CoMD');
 if (process.env.COMD_TEST_DIR) app.setPath('userData', process.env.COMD_TEST_DIR);
 protocol.registerSchemesAsPrivileged([{ scheme: 'comd-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
 let win, state = { docs: [], activeId: null, recent: [], recentItems: [], preferences: {}, folder: null }, closing = false, pollBusy = false, quitting = false;
 const records = new Map();
+const openingPaths = new Map();
 let stateQueue = Promise.resolve(), saveQueue = Promise.resolve();
 const dataFile = () => path.join(app.getPath('userData'), 'workspace.json');
 const aiFile = () => path.join(app.getPath('userData'), 'ai.json');
@@ -48,11 +50,16 @@ async function openPath(filePath) {
   for (const [id, record] of records) if (record.path === realPath) {
     remember(realPath); await checkpoint(); return { ...snapshot(id, record), existing: true };
   }
-  const disk = await readDocument(realPath), id = randomUUID();
-  const record = { path: realPath, ...disk, baseHash: disk.hash, observedHash: disk.hash };
-  records.set(id, record); remember(realPath);
-  await checkpoint();
-  return snapshot(id, record);
+  if (openingPaths.has(realPath)) return { ...await openingPaths.get(realPath), existing: true };
+  const operation = (async () => {
+    const disk = await readDocument(realPath), id = randomUUID();
+    const record = { path: realPath, ...disk, baseHash: disk.hash, observedHash: disk.hash };
+    records.set(id, record); remember(realPath);
+    await checkpoint();
+    return snapshot(id, record);
+  })();
+  openingPaths.set(realPath, operation);
+  try { return await operation; } finally { openingPaths.delete(realPath); }
 }
 function handle(channel, callback) {
   ipcMain.handle(channel, async (event, ...args) => {
@@ -144,6 +151,23 @@ function installHandlers() {
   handle('external', async raw => {
     const url = new URL(raw); if (!['https:', 'http:', 'mailto:'].includes(url.protocol)) throw new Error('不支持此链接类型。');
     await shell.openExternal(url.href); return true;
+  });
+  handle('open-link', async (id, href) => {
+    const target = resolveDocumentLink(records.get(id)?.path, href);
+    if (target.kind === 'anchor') return target;
+    if (target.kind === 'external') { await shell.openExternal(target.url); return { kind: 'external' }; }
+    // Local reads originate from an open document, not an arbitrary renderer path.
+    if (!records.has(id)) throw new Error('请先保存当前文档，再打开本地文件链接。');
+    try {
+      if (target.kind === 'document') return { kind: 'document', document: await openPath(target.path), fragment: target.fragment };
+      const realPath = await fs.realpath(target.path);
+      if (!/\.pdf$/i.test(realPath) || !(await fs.stat(realPath)).isFile()) throw new Error('链接指向的不是 PDF 文件。');
+      const error = await shell.openPath(realPath); if (error) throw new Error('无法打开 PDF：' + error);
+      return { kind: 'external' };
+    } catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') throw new Error('找不到链接指向的文件：' + target.path);
+      throw error;
+    }
   });
   handle('export', async (kind, html, title) => {
     if (!['html', 'pdf'].includes(kind) || typeof html !== 'string' || html.length > 40 * 1024 * 1024) throw new Error('导出数据无效。');
