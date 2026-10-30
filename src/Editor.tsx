@@ -1,15 +1,28 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { EditorState, Compartment, type Range } from '@codemirror/state';
+import { EditorState, Compartment, StateEffect, StateField, Transaction, type Range } from '@codemirror/state';
 import { EditorView, Decoration, ViewPlugin, WidgetType, keymap, lineNumbers, drawSelection, highlightActiveLine, placeholder, type DecorationSet, type ViewUpdate } from '@codemirror/view';
-import { history, historyKeymap, defaultKeymap, indentWithTab } from '@codemirror/commands';
+import { history, historyKeymap, defaultKeymap, indentWithTab, isolateHistory } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { syntaxTree, syntaxHighlighting, HighlightStyle, bracketMatching, indentOnInput } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
-import { searchKeymap, highlightSelectionMatches, search, openSearchPanel } from '@codemirror/search';
+import { highlightSelectionMatches } from '@codemirror/search';
 import { markdownLink } from './markdown';
+import type { SearchMatch } from './searchEngine';
 const states = new Map<string, EditorState>();
 export const forgetEditor = (id: string) => states.delete(id);
+type SearchHits = { matches: readonly { from: number; to: number }[]; current: number };
+const setSearchHits = StateEffect.define<SearchHits>();
+const searchHits = StateField.define<SearchHits>({
+  create: () => ({ matches: [], current: -1 }),
+  update(value, transaction) {
+    if (transaction.docChanged) value = { matches: [], current: -1 };
+    for (const effect of transaction.effects) if (effect.is(setSearchHits)) value = effect.value;
+    return value;
+  },
+  provide: field => EditorView.decorations.from(field, value => Decoration.set(value.matches
+    .flatMap((match, index) => match.to > match.from ? [Decoration.mark({ class: `cm-comd-search-match${index === value.current ? ' cm-comd-search-current' : ''}` }).range(match.from, match.to)] : []), true))
+});
 class Bullet extends WidgetType {
   toDOM() { const span = document.createElement('span'); span.className = 'live-bullet'; span.textContent = '•'; return span; }
 }
@@ -27,10 +40,13 @@ function liveDecorations(view: EditorView): DecorationSet {
   const selection = view.state.selection.main;
   const touched = (from: number, to: number) => {
     const first = view.state.doc.lineAt(from), last = view.state.doc.lineAt(to);
-    return view.hasFocus && selection.from <= last.to && selection.to >= first.from;
+    return (view.hasFocus && selection.from <= last.to && selection.to >= first.from) || view.state.field(searchHits).matches.some(hit => hit.from < to && hit.to > from);
   };
   const add = (from: number, to: number, className: string) => { if (to > from) ranges.push(Decoration.mark({ class: className }).range(from, to)); };
-  const hide = (from: number, to: number) => { if (to > from && !touched(from, to)) ranges.push(Decoration.replace({}).range(from, to)); };
+  const hide = (from: number, to: number) => {
+    const hits = view.state.field(searchHits);
+    if (to > from && !touched(from, to) && !hits.matches.some(hit => hit.from < to && hit.to > from)) ranges.push(Decoration.replace({}).range(from, to));
+  };
   for (const visible of view.visibleRanges) {
     syntaxTree(view.state).iterate({ from: visible.from, to: visible.to, enter(node) {
       const { from, to, name } = node;
@@ -63,15 +79,19 @@ const livePreview = ViewPlugin.fromClass(class {
   decorations: DecorationSet;
   constructor(view: EditorView) { this.decorations = liveDecorations(view); }
   update(update: ViewUpdate) {
-    if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged || syntaxTree(update.startState) !== syntaxTree(update.state)) this.decorations = liveDecorations(update.view);
+    if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged || update.transactions.some(t => t.effects.some(e => e.is(setSearchHits))) || syntaxTree(update.startState) !== syntaxTree(update.state)) this.decorations = liveDecorations(update.view);
   }
 }, { decorations: plugin => plugin.decorations });
 export interface EditorHandle {
-  find(): void; wrap(before: string, after?: string): void; insert(text: string): void;
+  focus(): void; wrap(before: string, after?: string): void; insert(text: string): void;
   heading(level: number): void;
   selection(): { from: number; to: number; text: string } | null;
   replace(from: number, to: number, text: string): void; goTo(line: number): void;
   scrollToRatio(ratio: number): void;
+  showSearch(matches: readonly { from: number; to: number }[], current: number, scroll?: boolean): void;
+  revealLine(line: number): void;
+  replaceMatches(matches: readonly SearchMatch[], expected: string): boolean;
+  selectSearch(from: number, to: number): void;
 }
 interface Props { id: string; content: string; mode: string; dark: boolean; fontSize: number; onChange(text: string): void; onCursor(line: number, col: number, selected: number): void; onScroll?(ratio: number): void; onLink(href: string): void }
 export const Editor = forwardRef<EditorHandle, Props>((props, ref) => {
@@ -87,7 +107,27 @@ export const Editor = forwardRef<EditorHandle, Props>((props, ref) => {
     { tag: [tags.number, tags.bool], color: dark ? '#d2ac79' : '#ad743d' }, { tag: tags.function(tags.variableName), color: dark ? '#9dbfc7' : '#416e7c' }
   ]))];
   useImperativeHandle(ref, () => ({
-    find() { if (view.current) openSearchPanel(view.current); },
+    focus() { view.current?.focus(); },
+    selectSearch(from, to) { const v = view.current; if (v) v.dispatch({ selection: { anchor: from, head: to }, effects: EditorView.scrollIntoView(from, { y: 'nearest' }) }); },
+    showSearch(matches, current, scroll = false) {
+      const v = view.current; if (!v) return;
+      const effects = [setSearchHits.of({ matches, current })];
+      const hit = matches[current];
+      v.dispatch({ effects: [...effects, ...(scroll && hit ? [EditorView.scrollIntoView(hit.from, { y: 'center' })] : [])] });
+    },
+    revealLine(line) {
+      const v = view.current; if (!v) return;
+      const from = v.state.doc.line(Math.max(1, Math.min(line, v.state.doc.lines))).from;
+      v.dispatch({ effects: EditorView.scrollIntoView(from, { y: 'center' }) });
+    },
+    replaceMatches(matches, expected) {
+      const v = view.current; if (!v || !matches.length || v.state.doc.toString() !== expected) return false;
+      v.dispatch({ changes: matches.map(({ from, to, insert }) => ({ from, to, insert })),
+        selection: { anchor: matches[0].from + matches[0].insert.length },
+        annotations: [isolateHistory.of('full'), Transaction.userEvent.of('input.replace')] });
+      v.focus();
+      return true;
+    },
     heading(level) {
       const v = view.current; if (!v) return; const line = v.state.doc.lineAt(v.state.selection.main.head);
       const old = /^#{1,6}\s+/.exec(line.text)?.[0] ?? '', prefix = level > 0 ? '#'.repeat(level) + ' ' : '';
@@ -120,9 +160,9 @@ export const Editor = forwardRef<EditorHandle, Props>((props, ref) => {
     };
     let pointerLink: { position: number; x: number; y: number; modified: boolean } | null = null;
     const extensions = [
-      history(), drawSelection(), bracketMatching(), indentOnInput(), highlightSelectionMatches(),
-      search({ top: true }), markdown({ base: markdownLanguage, codeLanguages: languages }),
-      keymap.of([{ key: 'Mod-Enter', run: v => followLink(v, v.state.selection.main.head) }, { key: 'Mod-b', run: wrap('**') }, { key: 'Mod-i', run: wrap('*') }, ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
+      history(), drawSelection(), bracketMatching(), indentOnInput(), highlightSelectionMatches(), searchHits,
+      markdown({ base: markdownLanguage, codeLanguages: languages }),
+      keymap.of([{ key: 'Mod-Enter', run: v => followLink(v, v.state.selection.main.head) }, { key: 'Mod-b', run: wrap('**') }, { key: 'Mod-i', run: wrap('*') }, ...defaultKeymap, ...historyKeymap, indentWithTab]),
       EditorView.lineWrapping, placeholder('从一个想法开始…'),
       EditorView.contentAttributes.of({ 'aria-label': 'Markdown 编辑器', spellcheck: 'false' }),
       mode.current.of(props.mode === 'live' ? [livePreview] : [lineNumbers(), highlightActiveLine()]),

@@ -40,19 +40,20 @@ md.block.ruler.before('fence', 'math_block', (state, startLine, endLine, silent)
 });
 const math = (content: string, displayMode: boolean) => katex.renderToString(content, { throwOnError: false, displayMode, trust: false, strict: 'ignore' });
 md.renderer.rules.math_inline = (tokens, index) => math(tokens[index].content, false);
-md.renderer.rules.math_block = (tokens, index) => `<div class="math-block">${math(tokens[index].content, true)}</div>`;
+md.renderer.rules.math_block = (tokens, index) => `<div class="math-block" data-comd-line="${(tokens[index].map?.[0] ?? 0) + 1}">${math(tokens[index].content, true)}</div>`;
 const headingRule = md.renderer.rules.heading_open;
 md.renderer.rules.heading_open = (tokens, index, options, env, self) => {
   tokens[index].attrSet('data-comd-line', String((tokens[index].map?.[0] ?? index) + 1));
   return headingRule ? headingRule(tokens, index, options, env, self) : self.renderToken(tokens, index, options);
 };
 function annotateHTMLHeadings(html: string, startLine: number) {
-  return html.replace(/<(h[1-6]|a)\b([^>]*)>/gi, (tag, name, attributes, offset) =>
+  return html.replace(/<(h[1-6]|a|p|div|span|details|summary|table|tr|td|th|pre|code|li|ul|ol|blockquote)\b([^>]*)>/gi, (tag, name, attributes, offset) =>
     `<${name} data-comd-line="${startLine + html.slice(0, offset).split('\n').length}"${attributes}>`);
 }
 md.renderer.rules.html_block = (tokens, index) => annotateHTMLHeadings(tokens[index].content, tokens[index].map?.[0] ?? 0);
 md.core.ruler.after('inline', 'anchor_source_lines', state => {
   for (const block of state.tokens) {
+    if (block.map && block.type !== 'inline') block.attrSet('data-comd-line', String(block.map[0] + (block.type === 'fence' ? 2 : 1)));
     if (block.type !== 'inline' || !block.map) continue;
     let offset = 0;
     for (const child of block.children ?? []) {

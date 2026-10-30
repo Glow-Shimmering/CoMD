@@ -131,8 +131,14 @@ kbd{font:10px/1.5 inherit;color:var(--muted)}
 .source-editor .cm-line{padding-left:20px;padding-right:30px}
 .source-editor .cm-lineNumbers .cm-gutterElement{min-width:40px;padding-right:10px}
 .editor-host .cm-selectionBackground,.editor-host .cm-focused>.cm-scroller>.cm-selectionLayer .cm-selectionBackground{background:var(--editor-selection)!important}
-.editor-host .cm-searchMatch{background:#d3bd713b;outline:1px solid #b8995144}
-.editor-host .cm-searchMatch-selected{background:#dbb94c79}
+/* Search paint is separate from the native text selection. */
+.editor-host .cm-comd-search-match{background:#7cabff42;border-radius:2px}
+.editor-host .cm-comd-search-current{background:#76a5ff78;outline:1px solid var(--brand);outline-offset:1px}
+::highlight(comd-search){background-color:#7cabff42;color:inherit}
+::highlight(comd-search-current){background-color:#76a5ff78;color:inherit;text-decoration:underline solid #2864e8 2px}
+[data-theme=dark] ::highlight(comd-search-current){background-color:#487de980;text-decoration-color:#9bbdff}
+.preview-pane:focus{outline:none}
+.preview-pane:focus-visible{outline:1px solid var(--accent);outline-offset:-2px}
 .editor-host .cm-md-heading{font-weight:650;letter-spacing:-.5px;color:var(--text);line-height:1.5;padding-top:24px;padding-bottom:14px}
 .editor-host .cm-md-h1{font-size:1.9em;line-height:1.4;padding-top:9px;padding-bottom:21px;letter-spacing:-1px}
 .editor-host .cm-md-h2{font-size:1.35em}
@@ -250,12 +256,6 @@ kbd{font:10px/1.5 inherit;color:var(--muted)}
 .is-focus .document-toolbar .breadcrumb{opacity:.6}
 .is-focus .document-toolbar{height:50px}
 .is-focus .formatbar{margin:0 auto;width:min(760px,90%)}
-.cm-panels{background:var(--soft)!important;color:var(--text)!important;border-color:var(--line)!important;font:12px/1.5 -apple-system,BlinkMacSystemFont,sans-serif!important}
-.cm-panels .cm-textfield{background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:5px 8px;color:var(--text)}
-.cm-panels .cm-button{background:var(--hover);border:1px solid var(--line);border-radius:4px;color:var(--text);padding:4px 9px;font-size:11px;text-transform:none}
-.cm-search label{font-size:11px;color:var(--subtle)}
-.cm-search{padding:12px 18px!important}
-.cm-search input[type=checkbox]{accent-color:var(--brand)}
 [data-theme=dark] .hljs-keyword,[data-theme=dark] .hljs-selector-tag{color:#ba9dce}
 [data-theme=dark] .hljs-string{color:#b3c897}
 [data-theme=dark] .hljs-number{color:#d2ac79}

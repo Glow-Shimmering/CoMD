@@ -15,6 +15,10 @@
     "Local links: relative/parent/Chinese/space paths, HTML/reference links, cross-file anchors and missing files",
     "Link navigation in live/read/split/source modes; existing dirty tabs retain content without duplicate tabs",
     "Blue task check marks verified in rendered pixels in live/split/read modes and both themes; toggling and export preserved",
+    "Document search: source/read/split navigation, Unicode text across inline markup, folded details and off-screen matches",
+    "Search controls: live task source, repeated-occurrence mapping, inline/typographer safety, navigation, options, selection shortcut and focus recovery",
+    "Regex replacement and one-step undo, Worker timeout recovery, read-only safeguards and stale query/document protection",
+    "Search highlights render in light/dark themes and never enter exported HTML",
     "Native file open, typing, autosave, UTF-8 BOM / CRLF preservation",
     "Clean document reloads external edits",
     "Dirty conflict detected without overwriting; explicit reload resolves it",
@@ -30,6 +34,20 @@
   "rendererErrors": [],
   "platform": "darwin",
   "arch": "arm64",
-  "packagedMacApplicationTested": false,
-  "realAIProviderTested": false
+  "packagedMacApplicationTested": true,
+  "realAIProviderTested": false,
+  "version": "0.3.5",
+  "packagedMacChecks": [
+    "Document search: source/read/split navigation, Unicode text across inline markup, folded details and off-screen matches",
+    "Search controls: live task source, repeated-occurrence mapping, inline/typographer safety, navigation, options, selection shortcut and focus recovery",
+    "Regex replacement and one-step undo, Worker timeout recovery, read-only safeguards and stale query/document protection",
+    "Search highlights render in light/dark themes and never enter exported HTML"
+  ],
+  "packageChecks": {
+    "sameApplicationFiles": 186,
+    "windowsX64Metadata": true,
+    "windowsVersion": "0.3.5.0",
+    "macSignatureVerified": true,
+    "windowsRuntimeTested": false
+  }
 }

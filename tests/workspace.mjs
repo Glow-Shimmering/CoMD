@@ -32,7 +32,7 @@ export async function checkWorkspace(page, application, { temp, output, setText,
   const htmlFile = path.join(output, 'mixed-html-export.html');
   await exportViaUI('html', htmlFile);
   const html = await fs.readFile(htmlFile, 'utf8');
-  assert.match(html, /<details>/); assert.match(html, /color: rgb\(229, 57, 53\)/); assert.doesNotMatch(html, /<script|<iframe|position:fixed|window.__injected/);
+  assert.match(html, /<details(?:\s[^>]*)?>/); assert.match(html, /color: rgb\(229, 57, 53\)/); assert.doesNotMatch(html, /<script|<iframe|position:fixed|window.__injected/);
   assert.equal(await fs.readFile(path.join(folder, '混排.md'), 'utf8'), mixed, 'Rendering does not rewrite the source');
   await page.locator('.sidebar-switch').getByRole('button', { name: '文件', exact: true }).click();
   await tree.getByRole('button', { name: '展开文件夹 章节', exact: true }).click();

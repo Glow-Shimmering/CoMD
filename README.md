@@ -2,6 +2,15 @@
 
 专注文字，自在表达。基于 Electron、React、TypeScript 和 CodeMirror 6 独立实现的本地 Markdown 桌面应用。
 
+## 0.3.5 文档搜索与替换
+
+- 顶栏统一搜索入口，Cmd/Ctrl+F 在实时、源码、双栏和阅读模式均可使用；选中文字后自动填入查询。
+- 全文匹配计数、浅蓝高亮、当前命中标记；Enter/Shift+Enter 前后跳转，Esc 关闭并回到文档。
+- 阅读模式搜索渲染文字，可跨粗体/链接匹配，命中折叠 details 自动展开。实时/源码搜索 Markdown 源码；双栏可切换正文/源码范围，计数不重复，另一栏定位到对应段落。
+- 支持大小写、中文/英文全词及正则搜索；无结果、非法或空匹配正则有明确提示。后台 Worker 超时保护，最多显示 5000 处匹配。
+- 替换默认折叠，支持单处/全部替换、正则捕获组；全部替换可一次撤销，保留此前输入。替换操作始终作用于源码；阅读模式提供显式切换入口。
+- 查询或文档改变后禁用旧结果；高亮不修改文件，也不会进入 HTML/PDF 导出。暂不包含跨文件夹全文搜索。
+
 ## 0.3.4 文档链接与待办样式修复
 
 - 本地 Markdown/文本链接按当前文档所在目录解析，支持中文、空格、上级目录、HTML 链接与引用式链接；使用应用内标签打开，保留已打开文档的未保存内容。
@@ -40,11 +49,11 @@
 
 ## 使用
 
-- **macOS Apple Silicon**：打开发布目录 `release/0.3.4/` 里的 DMG，把 CoMD 拖入 Applications；也可以解压 macOS ZIP 后打开 CoMD.app。适用于 M 系列芯片，macOS 13 或更新版本。
+- **macOS Apple Silicon**：打开发布目录 `release/0.3.5/` 里的 DMG，把 CoMD 拖入 Applications；也可以解压 macOS ZIP 后打开 CoMD.app。适用于 M 系列芯片，macOS 13 或更新版本。
 - **Windows x64**：解压 Windows ZIP 到一个固定目录，双击 CoMD.exe。请保留同目录的 DLL、resources 等配套文件。适用于 Windows 10/11 的 x64 设备。若提供 Setup.exe，也可用安装向导安装。
 - 本地编辑无需账号与网络。首次打开会显示可编辑的欢迎文档。按 Cmd/Ctrl+O 打开自己的文件，Cmd/Ctrl+S 保存。
 
-这是 0.3.4 文档链接与待办样式修复版。macOS 使用本机 ad-hoc 签名，未进行 Apple Developer ID 签名/公证；Windows 未使用商业代码签名证书。系统可能显示未识别开发者的提示。确认文件来自本次构建后，按系统提供的“仍要打开/仍要运行”流程处理；不要关闭整个系统的安全保护。
+这是 0.3.5 文档搜索与替换版。macOS 使用本机 ad-hoc 签名，未进行 Apple Developer ID 签名/公证；Windows 未使用商业代码签名证书。系统可能显示未识别开发者的提示。确认文件来自本次构建后，按系统提供的“仍要打开/仍要运行”流程处理；不要关闭整个系统的安全保护。
 
 ## 功能
 
@@ -107,6 +116,8 @@ npm run dist:win:installer # Windows x64 NSIS 安装器，推荐 Windows runner
 若运行时已下载并校验，可给 electron-builder 传入 `--config.electronDist=build/cache`。发行脚本不会发布到任何服务器。GitHub Actions 配置只在手动触发时运行，构建产物保存在 Actions artifacts，不自动发布 Release。
 
 ## 验证范围
+
+`tests/search-engine.test.cjs` 验证匹配、词界、正则替换与结果上限；`tests/search.mjs` 验证真实搜索交互、双栏定位、撤销、选区快捷键与高亮像素。
 
 `tests/*.test.cjs` 验证 BOM/换行、备份、外部修改冲突、非 UTF-8 拒绝、目录边界、历史记录迁移、更新版本比较/平台匹配/调度/超时。`tests/desktop.mjs` 使用真实 Electron 窗口和临时数据目录，验证实际选区像素、启动自动检查、更新设置与失败恢复、最近文件/文件夹搜索与恢复、文件夹与路径边界、HTML 混排和过滤、双栏双向滚动、大纲分层折叠、文档间状态保持、输入、磁盘保存、冲突、图片/公式、HTML/PDF、标签页撤销、重启恢复，以及本机模拟 API 的 AI 修改流程。测试报告与截图位于 `test-results/`。
 
